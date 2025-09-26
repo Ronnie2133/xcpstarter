@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: papaks-xcp-starter-batch-costing
+    env: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: STAFF_USERNAME
+        value: admin
+      - key: STAFF_PASSWORD
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: papaks-xcp-db
+          property: connectionString
+    autoDeploy: true
+  - type: postgres
+    name: papaks-xcp-db
+    plan: free
