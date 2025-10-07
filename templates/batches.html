@@ -1,1 +1,26 @@
-{% extends 'layout.html' %}{% block content %}<h2>Batches</h2>{% endblock %}
+{% extends 'layout.html' %}
+{% block content %}
+<h2>Batches</h2>
+<h3>Create Batch</h3>
+<form method="post">
+  <input name="name" placeholder="Batch name" required>
+  <input name="yield_qty" type="number" step="0.01" placeholder="Yield qty" required>
+  <input name="yield_unit" placeholder="Yield unit (g, kg, oz, lb, ml, l)" value="lb" required>
+  <input name="notes" placeholder="Notes">
+  <button>Create</button>
+</form>
+<h3>Existing Batches</h3>
+<table>
+  <tr><th>Name</th><th>Yield</th><th>Total Cost</th><th></th></tr>
+  {% for b in batches %}
+    <tr>
+      <td>{{ b.name }}</td>
+      <td>{{ '%.2f'|format(b.yield_qty) }} {{ b.yield_unit }}</td>
+      <td>${{ '%.2f'|format(b.total_cost) }}</td>
+      <td><a href="{{ url_for('batch_detail', batch_id=b.id) }}">Open</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4">No batches yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
