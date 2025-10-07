@@ -1,1 +1,27 @@
-{% extends 'layout.html' %}{% block content %}<h2>Menu</h2>{% endblock %}
+{% extends 'layout.html' %}
+{% block content %}
+<h2>Menu</h2>
+<h3>Create Menu Item</h3>
+<form method="post">
+  <input name="name" placeholder="Name" required>
+  <input name="price" type="number" step="0.01" placeholder="Price" required>
+  <input name="notes" placeholder="Notes">
+  <button>Create</button>
+</form>
+<h3>Existing Menu Items</h3>
+<table>
+  <tr><th>Name</th><th>Cost</th><th>Price</th><th>Margin</th><th></th></tr>
+  {% for m in menu %}
+    {% set margin = (m.price - m.cost) if (m.price is not none) else 0 %}
+    <tr>
+      <td>{{ m.name }}</td>
+      <td>${{ '%.2f'|format(m.cost) }}</td>
+      <td>${{ '%.2f'|format(m.price) }}</td>
+      <td>${{ '%.2f'|format(margin) }}</td>
+      <td><a href="{{ url_for('menu_detail', menu_id=m.id) }}">Open</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">No menu items yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
