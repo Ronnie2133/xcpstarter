@@ -1,0 +1,64 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h2>Menu: {{ m.name }}</h2>
+<p class="muted">Cost: ${{ '%.2f'|format(m.cost) }} &nbsp; | &nbsp; Price: ${{ '%.2f'|format(m.price) }}</p>
+
+<h3>Set Price</h3>
+<form method="post" action="{{ url_for('menu_detail', menu_id=m.id, action='update_price') }}">
+  <input name="price" type="number" step="0.01" value="{{ '%.2f'|format(m.price) }}">
+  <button>Save Price</button>
+</form>
+
+<h3>Inventory Components</h3>
+<table>
+  <tr><th>Item</th><th>Qty</th><th>Unit</th><th>Ext. Cost</th><th></th></tr>
+  {% for c in m.inv_components %}
+    <tr>
+      <td>{{ c.item.name }}</td>
+      <td>{{ '%.3f'|format(c.qty) }}</td>
+      <td>{{ c.unit }}</td>
+      <td>${{ '%.2f'|format(c.ext_cost) }}</td>
+      <td><a href="{{ url_for('menu_delete_inv', menu_id=m.id, ing_id=c.id) }}">Remove</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">None yet.</td></tr>
+  {% endfor %}
+</table>
+
+<form method="post" action="{{ url_for('menu_detail', menu_id=m.id, action='add_inv') }}">
+  <select name="item_id" required>
+    {% for i in inv_items %}
+      <option value="{{ i.id }}">{{ i.name }} (${{ '%.2f'|format(i.unit_cost) }} / {{ i.unit }})</option>
+    {% endfor %}
+  </select>
+  <input name="qty" type="number" step="0.01" placeholder="Qty" required>
+  <input name="unit" placeholder="Unit (g, kg, oz, lb, ml, l)" required>
+  <button>Add Inventory Component</button>
+</form>
+
+<h3>Batch Portions</h3>
+<table>
+  <tr><th>Batch</th><th>Portion</th><th>Ext. Cost</th><th></th></tr>
+  {% for bp in m.batch_portions %}
+    <tr>
+      <td>{{ bp.batch.name }}</td>
+      <td>{{ '%.3f'|format(bp.portion_qty) }} {{ bp.portion_unit }}</td>
+      <td>${{ '%.2f'|format(bp.ext_cost) }}</td>
+      <td><a href="{{ url_for('menu_delete_batch', menu_id=m.id, bp_id=bp.id) }}">Remove</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4">None yet.</td></tr>
+  {% endfor %}
+</table>
+
+<form method="post" action="{{ url_for('menu_detail', menu_id=m.id, action='add_batch') }}">
+  <select name="batch_id" required>
+    {% for b in batches %}
+      <option value="{{ b.id }}">{{ b.name }} (Yield {{ '%.2f'|format(b.yield_qty) }} {{ b.yield_unit }})</option>
+    {% endfor %}
+  </select>
+  <input name="portion_qty" type="number" step="0.01" placeholder="Portion Qty" required>
+  <input name="portion_unit" placeholder="Portion Unit (match batch type)" required>
+  <button>Add Batch Portion</button>
+</form>
+{% endblock %}
