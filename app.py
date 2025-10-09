@@ -49,7 +49,29 @@ class InventoryItem(db.Model):
     unit = db.Column(db.String(10), nullable=False)
     unit_cost = db.Column(db.Float, default=0.0)
 
-# === NEW: allow batches to include other batches ===
+# === Sub-batches: allow batches to include other batches ===
+class BatchRecipe(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), unique=True, nullable=False)
+    yield_qty = db.Column(db.Float, nullable=False)
+    yield_unit = db.Column(db.String(10), nullable=False)
+    notes = db.Column(db.Text, default='')
+    ingredients = relationship('BatchIngredient', backref='batch', cascade='all, delete-orphan')
+
+    @property
+    def total_cost(self) -> float:
+        # inventory ingredient cost
+        inv_cost = sum(ing.ext_cost for ing in self.ingredients)
+        # sub-batch cost (defensive: don't crash UI over unit mistakes)
+        sub_cost = 0.0
+        for sb in getattr(self, 'sub_batches', []):
+            try:
+                sub_cost += sb.ext_cost
+            except Exception:
+                # bad unit or zero yield on child; treat as $0 so page still renders
+                continue
+        return inv_cost + sub_cost
+
 class BatchSubBatch(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     parent_id = db.Column(db.Integer, db.ForeignKey('batch_recipe.id'), nullable=False)
@@ -62,27 +84,14 @@ class BatchSubBatch(db.Model):
 
     @property
     def ext_cost(self) -> float:
+        # Safe cost math: return 0 if dimensions mismatch or invalid child yield
+        if not self.child or (self.child.yield_qty or 0) <= 0:
+            return 0.0
         if not same_dimension(self.unit, self.child.yield_unit):
-            raise ValueError('Sub-batch portion unit must match child yield unit type.')
+            return 0.0
         portion_in_yield_unit = convert(self.qty, self.unit, self.child.yield_unit)
-        return (portion_in_yield_unit / (self.child.yield_qty or 1.0)) * self.child.total_cost
-# === /NEW ===
-
-class BatchRecipe(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(200), unique=True, nullable=False)
-    yield_qty = db.Column(db.Float, nullable=False)
-    yield_unit = db.Column(db.String(10), nullable=False)
-    notes = db.Column(db.Text, default='')
-    ingredients = relationship('BatchIngredient', backref='batch', cascade='all, delete-orphan')
-
-    @property
-    def total_cost(self) -> float:
-        # === NEW: include nested sub-batches in cost ===
-        inv_cost = sum(ing.ext_cost for ing in self.ingredients)
-        sub_cost = sum(sb.ext_cost for sb in getattr(self, 'sub_batches', []))
-        return inv_cost + sub_cost
-        # === /NEW ===
+        return (portion_in_yield_unit / self.child.yield_qty) * (self.child.total_cost or 0.0)
+# === /Sub-batches ===
 
 class BatchIngredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -133,9 +142,11 @@ class MenuBatchPortion(db.Model):
     @property
     def ext_cost(self) -> float:
         if not same_dimension(self.portion_unit, self.batch.yield_unit):
-            raise ValueError('Portion unit must match batch yield unit type.')
+            return 0.0
+        if (self.batch.yield_qty or 0) <= 0:
+            return 0.0
         portion_in_yield_unit = convert(self.portion_qty, self.portion_unit, self.batch.yield_unit)
-        return (portion_in_yield_unit / (self.batch.yield_qty or 1.0)) * self.batch.total_cost
+        return (portion_in_yield_unit / self.batch.yield_qty) * (self.batch.total_cost or 0.0)
 
 # ---------- Auth via env ----------
 STAFF_USER = os.environ.get('STAFF_USERNAME', None)
@@ -281,7 +292,10 @@ def inventory_import_csv():
 def batches():
     if request.method == 'POST':
         name = request.form.get('name','').strip()
-        yield_qty = float(request.form.get('yield_qty') or 0)
+        try:
+            yield_qty = float(request.form.get('yield_qty') or 0)
+        except Exception:
+            yield_qty = 0.0
         yield_unit = (request.form.get('yield_unit') or '').strip().lower()
         notes = (request.form.get('notes') or '').strip()
 
@@ -308,7 +322,8 @@ def batch_detail(batch_id):
             qty = float(request.form['qty'])
             unit = request.form['unit'].strip().lower()
         except Exception:
-            flash('Please provide item, qty, and unit.'); return redirect(url_for('batch_detail', batch_id=b.id))
+            flash('Please provide item, qty, and unit.'); 
+            return redirect(url_for('batch_detail', batch_id=b.id))
 
         if unit not in ('g','kg','oz','lb','ml','l'):
             flash('Unit must be one of g, kg, oz, lb, ml, l.')
@@ -318,7 +333,8 @@ def batch_detail(batch_id):
             flash('Ingredient added.')
         return redirect(url_for('batch_detail', batch_id=b.id))
 
-    return render_template('batch_detail.html', b=b, items=items, db_url=db_url)
+    all_batches = BatchRecipe.query.order_by(BatchRecipe.name).all()
+    return render_template('batch_detail.html', b=b, items=items, all_batches=all_batches, db_url=db_url)
 
 @app.route('/batches/<int:batch_id>/delete_ing/<int:ing_id>')
 def batch_delete_ing(batch_id, ing_id):
@@ -327,7 +343,7 @@ def batch_delete_ing(batch_id, ing_id):
     flash('Removed ingredient.')
     return redirect(url_for('batch_detail', batch_id=batch_id))
 
-# === NEW: CSV export/import for batches (with nested sub-batches) ===
+# CSV export/import for batches (with nested sub-batches)
 @app.route('/batches/export.csv')
 def batches_export_csv():
     si = io.StringIO(); w = csv.writer(si)
@@ -414,14 +430,47 @@ def batches_import_csv():
     db.session.commit()
     flash(f'Batches import complete. Created {created}, updated {updated}, skipped {skipped}.')
     return redirect(url_for('batches'))
-# === /NEW ===
+
+# Sub-batch UI helpers (used by batch_detail.html)
+@app.route('/batches/<int:batch_id>/add_subbatch', methods=['POST'])
+def batch_add_subbatch(batch_id):
+    parent = BatchRecipe.query.get_or_404(batch_id)
+    try:
+        child_id = int(request.form['child_id'])
+        qty = float(request.form['qty'])
+        unit = (request.form['unit'] or '').strip().lower()
+    except Exception:
+        flash('Select a batch and enter a valid portion.')
+        return redirect(url_for('batch_detail', batch_id=batch_id))
+    if unit not in ('g','kg','oz','lb','ml','l'):
+        flash('Unit must be one of g, kg, oz, lb, ml, l.')
+        return redirect(url_for('batch_detail', batch_id=batch_id))
+    if child_id == parent.id:
+        flash('A batch cannot include itself.')
+        return redirect(url_for('batch_detail', batch_id=batch_id))
+
+    child = BatchRecipe.query.get_or_404(child_id)
+    db.session.add(BatchSubBatch(parent_id=parent.id, child_id=child.id, qty=qty, unit=unit))
+    db.session.commit()
+    flash('Sub-batch added.')
+    return redirect(url_for('batch_detail', batch_id=batch_id))
+
+@app.route('/batches/<int:batch_id>/delete_subbatch/<int:sb_id>')
+def batch_delete_subbatch(batch_id, sb_id):
+    sb = BatchSubBatch.query.get_or_404(sb_id)
+    db.session.delete(sb); db.session.commit()
+    flash('Removed sub-batch.')
+    return redirect(url_for('batch_detail', batch_id=batch_id))
 
 # ----- Menu -----
 @app.route('/menu', methods=['GET','POST'])
 def menu_items():
     if request.method == 'POST':
         name = request.form.get('name','').strip()
-        price = float(request.form.get('price') or 0)
+        try:
+            price = float(request.form.get('price') or 0)
+        except Exception:
+            price = 0.0
         notes = request.form.get('notes','').strip()
         if not name:
             flash('Name is required.')
@@ -449,7 +498,8 @@ def menu_detail(menu_id):
                 qty = float(request.form['qty'])
                 unit = request.form['unit'].strip().lower()
             except Exception:
-                flash('Provide item, qty, unit.'); return redirect(url_for('menu_detail', menu_id=m.id))
+                flash('Provide item, qty, unit.')
+                return redirect(url_for('menu_detail', menu_id=m.id))
             if unit not in ('g','kg','oz','lb','ml','l'):
                 flash('Unit must be one of g, kg, oz, lb, ml, l.')
             else:
@@ -461,7 +511,8 @@ def menu_detail(menu_id):
                 qty = float(request.form['portion_qty'])
                 unit = request.form['portion_unit'].strip().lower()
             except Exception:
-                flash('Provide batch, portion qty, unit.'); return redirect(url_for('menu_detail', menu_id=m.id))
+                flash('Provide batch, portion qty, unit.')
+                return redirect(url_for('menu_detail', menu_id=m.id))
             db.session.add(MenuBatchPortion(menu_id=m.id, batch_id=batch_id, portion_qty=qty, portion_unit=unit))
             db.session.commit(); flash('Batch portion added.')
         elif action == 'update_price':
@@ -484,34 +535,6 @@ def menu_delete_batch(menu_id, bp_id):
     db.session.delete(bp); db.session.commit()
     flash('Removed batch portion.')
     return redirect(url_for('menu_detail', menu_id=menu_id))
-
-# Sub-batch UI helpers (used by batch_detail.html)
-@app.route('/batches/<int:batch_id>/add_subbatch', methods=['POST'])
-def batch_add_subbatch(batch_id):
-    parent = BatchRecipe.query.get_or_404(batch_id)
-    try:
-        child_id = int(request.form['child_id'])
-        qty = float(request.form['qty'])
-        unit = (request.form['unit'] or '').strip().lower()
-    except Exception:
-        flash('Select a batch and enter a valid portion.'); return redirect(url_for('batch_detail', batch_id=batch_id))
-    if unit not in ('g','kg','oz','lb','ml','l'):
-        flash('Unit must be one of g, kg, oz, lb, ml, l.'); return redirect(url_for('batch_detail', batch_id=batch_id))
-    if child_id == parent.id:
-        flash('A batch cannot include itself.'); return redirect(url_for('batch_detail', batch_id=batch_id))
-    from app import BatchSubBatch, BatchRecipe  # if this line is inside the same module you can omit it
-    child = BatchRecipe.query.get_or_404(child_id)
-    db.session.add(BatchSubBatch(parent_id=parent.id, child_id=child.id, qty=qty, unit=unit))
-    db.session.commit(); flash('Sub-batch added.')
-    return redirect(url_for('batch_detail', batch_id=batch_id))
-
-@app.route('/batches/<int:batch_id>/delete_sub/<int:sb_id>')
-def batch_delete_subbatch(batch_id, sb_id):
-    sb = BatchSubBatch.query.get_or_404(sb_id)
-    db.session.delete(sb); db.session.commit()
-    flash('Removed sub-batch.')
-    return redirect(url_for('batch_detail', batch_id=batch_id))
-
 
 # ---------- Run ----------
 if __name__ == '__main__':
