@@ -13,7 +13,13 @@ app = Flask(__name__, instance_relative_config=True)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret')
 
 # --- Database config (Render-safe) ---
-db_url = os.environ.get('DATABASE_URL')
+db_url = os.environ.get('DATABASE_URL', '')
+
+# --- Fix Render/Heroku URLs and enable psycopg v3 ---
+if db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql+psycopg://', 1)
+elif db_url.startswith('postgresql://'):
+    db_url = db_url.replace('postgresql://', 'postgresql+psycopg://', 1)
 if not db_url:
     candidates = ['/var/papaks', '/tmp/papaks']
     chosen = None
