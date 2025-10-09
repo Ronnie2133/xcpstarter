@@ -49,6 +49,25 @@ class InventoryItem(db.Model):
     unit = db.Column(db.String(10), nullable=False)
     unit_cost = db.Column(db.Float, default=0.0)
 
+# === NEW: allow batches to include other batches ===
+class BatchSubBatch(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('batch_recipe.id'), nullable=False)
+    child_id  = db.Column(db.Integer, db.ForeignKey('batch_recipe.id'), nullable=False)
+    qty       = db.Column(db.Float, nullable=False)
+    unit      = db.Column(db.String(10), nullable=False)
+
+    parent = relationship('BatchRecipe', foreign_keys=[parent_id], backref='sub_batches')
+    child  = relationship('BatchRecipe', foreign_keys=[child_id])
+
+    @property
+    def ext_cost(self) -> float:
+        if not same_dimension(self.unit, self.child.yield_unit):
+            raise ValueError('Sub-batch portion unit must match child yield unit type.')
+        portion_in_yield_unit = convert(self.qty, self.unit, self.child.yield_unit)
+        return (portion_in_yield_unit / (self.child.yield_qty or 1.0)) * self.child.total_cost
+# === /NEW ===
+
 class BatchRecipe(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), unique=True, nullable=False)
@@ -59,7 +78,11 @@ class BatchRecipe(db.Model):
 
     @property
     def total_cost(self) -> float:
-        return sum(ing.ext_cost for ing in self.ingredients)
+        # === NEW: include nested sub-batches in cost ===
+        inv_cost = sum(ing.ext_cost for ing in self.ingredients)
+        sub_cost = sum(sb.ext_cost for sb in getattr(self, 'sub_batches', []))
+        return inv_cost + sub_cost
+        # === /NEW ===
 
 class BatchIngredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -303,6 +326,95 @@ def batch_delete_ing(batch_id, ing_id):
     db.session.delete(ing); db.session.commit()
     flash('Removed ingredient.')
     return redirect(url_for('batch_detail', batch_id=batch_id))
+
+# === NEW: CSV export/import for batches (with nested sub-batches) ===
+@app.route('/batches/export.csv')
+def batches_export_csv():
+    si = io.StringIO(); w = csv.writer(si)
+    w.writerow(['batch_name','yield_qty','yield_unit','notes','component_type','component_name','qty','unit'])
+    for b in BatchRecipe.query.order_by(BatchRecipe.name).all():
+        # inventory components
+        for ing in b.ingredients:
+            w.writerow([b.name, b.yield_qty, b.yield_unit, b.notes or '',
+                        'inventory', ing.item.name, ing.qty, ing.unit])
+        # sub-batches
+        for sb in getattr(b, 'sub_batches', []):
+            w.writerow([b.name, b.yield_qty, b.yield_unit, b.notes or '',
+                        'batch', sb.child.name, sb.qty, sb.unit])
+    return Response(si.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=batches.csv'})
+
+@app.route('/batches/import.csv', methods=['POST'])
+def batches_import_csv():
+    f = request.files.get('file')
+    if not f or not f.filename.endswith('.csv'):
+        flash('Please upload a .csv file.'); return redirect(url_for('batches'))
+
+    text = f.stream.read().decode('utf-8', errors='replace')
+    rows = list(csv.DictReader(io.StringIO(text)))
+
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for r in rows:
+        name = (r.get('batch_name') or '').strip()
+        if name: groups[name].append(r)
+
+    created = 0; updated = 0; skipped = 0
+    for bname, items in groups.items():
+        first = items[0]
+        try:
+            yield_qty  = float(first.get('yield_qty') or 0)
+        except Exception:
+            yield_qty = 0
+        yield_unit = (first.get('yield_unit') or '').strip().lower()
+        notes      = (first.get('notes') or '').strip()
+
+        if yield_qty <= 0 or yield_unit not in ('g','kg','oz','lb','ml','l'):
+            skipped += 1; continue
+
+        batch = BatchRecipe.query.filter_by(name=bname).first()
+        if not batch:
+            batch = BatchRecipe(name=bname, yield_qty=yield_qty, yield_unit=yield_unit, notes=notes)
+            db.session.add(batch); db.session.flush()
+            created += 1
+        else:
+            batch.yield_qty = yield_qty; batch.yield_unit = yield_unit; batch.notes = notes
+            # clear existing comps to avoid duplicates
+            BatchIngredient.query.filter_by(batch_id=batch.id).delete()
+            BatchSubBatch.query.filter_by(parent_id=batch.id).delete()
+            updated += 1
+
+        for r in items:
+            ctype = (r.get('component_type') or '').strip().lower()
+            cname = (r.get('component_name') or '').strip()
+            try:
+                qty = float(r.get('qty') or 0)
+            except Exception:
+                qty = 0
+            unit = (r.get('unit') or '').strip().lower()
+            if not cname or qty <= 0 or unit not in ('g','kg','oz','lb','ml','l'):
+                continue
+
+            if ctype == 'inventory':
+                inv = InventoryItem.query.filter_by(name=cname).first()
+                if not inv:
+                    inv = InventoryItem(name=cname, unit=unit, unit_cost=0.0)
+                    db.session.add(inv); db.session.flush()
+                db.session.add(BatchIngredient(batch_id=batch.id, item_id=inv.id, qty=qty, unit=unit))
+            elif ctype == 'batch':
+                child = BatchRecipe.query.filter_by(name=cname).first()
+                if not child:
+                    # Placeholder child batch so import order doesn’t matter
+                    child = BatchRecipe(name=cname, yield_qty=1.0, yield_unit=unit, notes='(placeholder)')
+                    db.session.add(child); db.session.flush()
+                db.session.add(BatchSubBatch(parent_id=batch.id, child_id=child.id, qty=qty, unit=unit))
+            else:
+                continue
+
+    db.session.commit()
+    flash(f'Batches import complete. Created {created}, updated {updated}, skipped {skipped}.')
+    return redirect(url_for('batches'))
+# === /NEW ===
 
 # ----- Menu -----
 @app.route('/menu', methods=['GET','POST'])
