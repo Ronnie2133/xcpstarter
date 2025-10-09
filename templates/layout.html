@@ -1,32 +1,42 @@
 <!doctype html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PapaK XCP</title>
+  <meta charset="utf-8">
+  <title>XCP Starter</title>
   <style>
-    body{font-family:system-ui,Arial,sans-serif;margin:0;padding:0;}
-    .nav{display:flex;gap:12px;padding:12px 16px;background:#111;color:#fff;align-items:center}
-    .nav a{color:#fff;text-decoration:none;padding:6px 10px;border-radius:6px}
-    .nav a:hover{background:#333}
-    .wrap{padding:16px}
-    .flash{background:#fffbcc;border:1px solid #ffe58f;padding:8px 12px;border-radius:6px;margin:10px 0}
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:24px;color:#111}
+    a{color:#5a2ea6;text-decoration:none} a:hover{text-decoration:underline}
+    header{margin-bottom:18px} nav a{margin-right:14px}
+    table{border-collapse:collapse;width:100%;margin-top:10px}
+    th,td{border-bottom:1px solid #eee;padding:8px 10px;text-align:left}
+    th{font-weight:600;background:#fafafa}
+    .muted{color:#666}
+    .right{text-align:right}
+    .flash{background:#fff7d1;border:1px solid #f1e3a0;padding:10px;border-radius:6px;margin-bottom:14px}
+    input,select,button{padding:8px;border:1px solid #ccc;border-radius:6px}
+    button{background:#5a2ea6;color:#fff;border:none;cursor:pointer} button:hover{opacity:.95}
+    form.inline > *{margin-right:8px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
-  <div class="nav">
-    <strong>PapaK</strong>
-    <a href="{{ url_for('inventory') }}">Inventory</a>
-    <a href="{{ url_for('batches') }}">Batches</a>
-    <a href="{{ url_for('menu_items') }}">Menu</a>
-    {% if session.get('auth_ok') %}
-      <a href="{{ url_for('logout') }}" style="margin-left:auto">Logout</a>
-    {% endif %}
-  </div>
-  <div class="wrap">
-    {% with messages = get_flashed_messages() %}
+  <header>
+    <nav>
+      <a href="{{ url_for('index') }}">Dashboard</a>
+      <a href="{{ url_for('inventory') }}">Inventory</a>
+      <a href="{{ url_for('batches') }}">Batches</a>
+      <a href="{{ url_for('menu_items') }}">Menu</a>
+      {% if session.get('auth_ok') %}<a href="{{ url_for('logout') }}">Logout</a>{% endif %}
+    </nav>
+  </header>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
       {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
-    {% endwith %}
-    {% block content %}{% endblock %}
-  </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
 </body>
 </html>
