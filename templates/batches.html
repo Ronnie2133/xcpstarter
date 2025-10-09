@@ -1,26 +1,40 @@
 {% extends 'layout.html' %}
 {% block content %}
 <h2>Batches</h2>
-<h3>Create Batch</h3>
-<form method="post" action="{{ url_for('batches') }}">
-  <input name="name" placeholder="Batch name" required>
-  <input name="yield_qty" type="number" step="0.01" placeholder="Yield qty" required>
-  <input name="yield_unit" placeholder="Yield unit (g, kg, oz, lb, ml, l)" value="lb" required>
-  <input name="notes" placeholder="Notes">
-  <button>Create</button>
-</form>
+
+<div class="grid">
+  <section>
+    <h3>Create Batch</h3>
+    <form class="inline" method="post" action="{{ url_for('batches') }}">
+      <input name="name" placeholder="Batch name" required>
+      <input name="yield_qty" type="number" step="0.01" placeholder="Yield qty" required>
+      <select name="yield_unit" required>
+        {% for u in ['g','kg','oz','lb','ml','l'] %}
+          <option value="{{u}}" {% if u=='lb' %}selected{% endif %}>{{u}}</option>
+        {% endfor %}
+      </select>
+      <input name="notes" placeholder="Notes (optional)">
+      <button type="submit">Create</button>
+    </form>
+  </section>
+
+  <section>
+    <p class="muted">DB: {{ db_url }}</p>
+  </section>
+</div>
+
 <h3>Existing Batches</h3>
 <table>
-  <tr><th>Name</th><th>Yield</th><th>Total Cost</th><th></th></tr>
+  <tr><th>Name</th><th>Yield</th><th class="right">Total Cost</th><th></th></tr>
   {% for b in batches %}
     <tr>
       <td>{{ b.name }}</td>
       <td>{{ '%.2f'|format(b.yield_qty) }} {{ b.yield_unit }}</td>
-      <td>${{ '%.2f'|format(b.total_cost) }}</td>
+      <td class="right">${{ '%.2f'|format(b.total_cost) }}</td>
       <td><a href="{{ url_for('batch_detail', batch_id=b.id) }}">Open</a></td>
     </tr>
   {% else %}
-    <tr><td colspan="4">No batches yet.</td></tr>
+    <tr><td colspan="4" class="muted">No batches yet. Create one above.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}
