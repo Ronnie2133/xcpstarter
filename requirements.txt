@@ -2,4 +2,4 @@ flask
 flask_sqlalchemy
 python-dotenv
 gunicorn
-psycopg[binary]==3.2.1
+psycopg[binary]==3.2.10
