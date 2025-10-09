@@ -485,6 +485,34 @@ def menu_delete_batch(menu_id, bp_id):
     flash('Removed batch portion.')
     return redirect(url_for('menu_detail', menu_id=menu_id))
 
+# Sub-batch UI helpers (used by batch_detail.html)
+@app.route('/batches/<int:batch_id>/add_subbatch', methods=['POST'])
+def batch_add_subbatch(batch_id):
+    parent = BatchRecipe.query.get_or_404(batch_id)
+    try:
+        child_id = int(request.form['child_id'])
+        qty = float(request.form['qty'])
+        unit = (request.form['unit'] or '').strip().lower()
+    except Exception:
+        flash('Select a batch and enter a valid portion.'); return redirect(url_for('batch_detail', batch_id=batch_id))
+    if unit not in ('g','kg','oz','lb','ml','l'):
+        flash('Unit must be one of g, kg, oz, lb, ml, l.'); return redirect(url_for('batch_detail', batch_id=batch_id))
+    if child_id == parent.id:
+        flash('A batch cannot include itself.'); return redirect(url_for('batch_detail', batch_id=batch_id))
+    from app import BatchSubBatch, BatchRecipe  # if this line is inside the same module you can omit it
+    child = BatchRecipe.query.get_or_404(child_id)
+    db.session.add(BatchSubBatch(parent_id=parent.id, child_id=child.id, qty=qty, unit=unit))
+    db.session.commit(); flash('Sub-batch added.')
+    return redirect(url_for('batch_detail', batch_id=batch_id))
+
+@app.route('/batches/<int:batch_id>/delete_sub/<int:sb_id>')
+def batch_delete_subbatch(batch_id, sb_id):
+    sb = BatchSubBatch.query.get_or_404(sb_id)
+    db.session.delete(sb); db.session.commit()
+    flash('Removed sub-batch.')
+    return redirect(url_for('batch_detail', batch_id=batch_id))
+
+
 # ---------- Run ----------
 if __name__ == '__main__':
     app.run(debug=True)
