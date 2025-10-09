@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{% block title %}Papak’s{% endblock %}</title>
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem}
+      header,footer{color:#555}
+      .card{border:1px solid #ddd;border-radius:8px;padding:12px}
+      .table{width:100%;border-collapse:collapse}
+      .table th,.table td{border-bottom:1px solid #eee;padding:8px;text-align:left}
+      .button,button,input[type=submit]{display:inline-block;padding:.5rem .75rem;border:1px solid #ccc;border-radius:6px;background:#f8f8f8;cursor:pointer;text-decoration:none;color:inherit}
+      label{display:inline-block;min-width:90px}
+      input,select{padding:.4rem;border:1px solid #ccc;border-radius:6px}
+      .flash{background:#fff8d1;border:1px solid #f0e5a5;padding:.5rem .75rem;border-radius:6px;margin-bottom:.75rem}
+      nav a{margin-right:.75rem}
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav>
+        <a href="{{ url_for('index') }}">Dashboard</a>
+        <a href="{{ url_for('inventory') }}">Inventory</a>
+        <a href="{{ url_for('batches') }}">Batches</a>
+        <a href="{{ url_for('menu_items') }}">Menu</a>
+      </nav>
+      {% if db_url %}<small style="color:#888">DB: {{ db_url }}</small>{% endif %}
+      <hr>
+    </header>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+
+    <footer><hr><small>&copy; Papak’s</small></footer>
+  </body>
+</html>
