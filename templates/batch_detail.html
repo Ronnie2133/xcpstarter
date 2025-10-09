@@ -1,42 +1,79 @@
-{% extends 'layout.html' %}
+{% extends "base.html" %}
 {% block content %}
-<h2>Batch: {{ b.name }}</h2>
-<p class="muted">Yield: {{ '%.2f'|format(b.yield_qty) }} {{ b.yield_unit }}{% if b.notes %} • {{ b.notes }}{% endif %}</p>
+<h1>{{ b.name }}</h1>
+<p><strong>Yield:</strong> {{ b.yield_qty }} {{ b.yield_unit }}</p>
+<p>{{ b.notes }}</p>
 
-<h3>Ingredients</h3>
-<table>
-  <tr><th>Item</th><th style="text-align:right">Qty</th><th>Unit</th><th style="text-align:right">Ext. Cost</th><th></th></tr>
+<h3>Inventory ingredients</h3>
+<form method="post" class="card" style="margin-bottom:1rem;">
+  <input type="hidden" name="item_id" value="">
+  <div>
+    <label>Item</label>
+    <select name="item_id" required>
+      {% for i in items %}
+        <option value="{{ i.id }}">{{ i.name }} ({{ i.unit }}) — ${{ '%.4f' % i.unit_cost }}/{{ i.unit }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Qty</label>
+    <input name="qty" type="number" step="any" required style="width:10rem">
+    <select name="unit">
+      <option>g</option><option>kg</option><option>oz</option>
+      <option>lb</option><option>ml</option><option>l</option>
+    </select>
+  </div>
+  <button type="submit">Add ingredient</button>
+</form>
+
+<table class="table">
+  <thead><tr><th>Item</th><th>Qty</th><th>Ext Cost</th><th></th></tr></thead>
+  <tbody>
   {% for ing in b.ingredients %}
     <tr>
       <td>{{ ing.item.name }}</td>
-      <td style="text-align:right">{{ '%.3f'|format(ing.qty) }}</td>
-      <td>{{ ing.unit }}</td>
-      <td style="text-align:right">${{ '%.2f'|format(ing.ext_cost) }}</td>
+      <td>{{ ing.qty }} {{ ing.unit }}</td>
+      <td>${{ '%.2f' % ing.ext_cost }}</td>
       <td><a href="{{ url_for('batch_delete_ing', batch_id=b.id, ing_id=ing.id) }}">Remove</a></td>
     </tr>
-  {% else %}
-    <tr><td colspan="5" class="muted">No ingredients yet. Add some below.</td></tr>
   {% endfor %}
-  <tr>
-    <td colspan="3" style="text-align:right"><strong>Total</strong></td>
-    <td style="text-align:right"><strong>${{ '%.2f'|format(b.total_cost) }}</strong></td>
-    <td></td>
-  </tr>
+  </tbody>
 </table>
 
-<h3>Add Ingredient</h3>
-<form method="post" action="{{ url_for('batch_detail', batch_id=b.id) }}" class="inline">
-  <select name="item_id" required>
-    {% for i in items %}
-      <option value="{{ i.id }}">{{ i.name }} — ${{ '%.2f'|format(i.unit_cost) }}/{{ i.unit }}</option>
-    {% endfor %}
-  </select>
-  <input name="qty" type="number" step="0.01" placeholder="Qty" required>
-  <select name="unit" required>
-    {% for u in ['g','kg','oz','lb','ml','l'] %}
-      <option value="{{u}}">{{u}}</option>
-    {% endfor %}
-  </select>
-  <button type="submit">Add</button>
+<h3>Sub-batches</h3>
+<form action="{{ url_for('batch_add_subbatch', batch_id=b.id) }}" method="post" class="card" style="margin-bottom:1rem;">
+  <div>
+    <label>Batch</label>
+    <select name="child_id" required>
+      {% for sb in all_batches if sb.id != b.id %}
+        <option value="{{ sb.id }}">{{ sb.name }} (yields {{ sb.yield_qty }} {{ sb.yield_unit }})</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label>Portion</label>
+    <input name="qty" type="number" step="any" required style="width:10rem">
+    <select name="unit">
+      <option>g</option><option>kg</option><option>oz</option>
+      <option>lb</option><option>ml</option><option>l</option>
+    </select>
+  </div>
+  <button type="submit">Add sub-batch</button>
 </form>
+
+<table class="table">
+  <thead><tr><th>Batch</th><th>Portion</th><th>Ext Cost</th><th></th></tr></thead>
+  <tbody>
+  {% for sb in b.sub_batches %}
+    <tr>
+      <td>{{ sb.child.name }}</td>
+      <td>{{ sb.qty }} {{ sb.unit }}</td>
+      <td>${{ '%.2f' % sb.ext_cost }}</td>
+      <td><a href="{{ url_for('batch_delete_subbatch', batch_id=b.id, sb_id=sb.id) }}">Remove</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<p><strong>Total cost:</strong> ${{ '%.2f' % b.total_cost }}</p>
 {% endblock %}
