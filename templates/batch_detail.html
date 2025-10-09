@@ -2,11 +2,12 @@
 {% block content %}
 <h1>{{ b.name }}</h1>
 <p><strong>Yield:</strong> {{ b.yield_qty }} {{ b.yield_unit }}</p>
-<p>{{ b.notes }}</p>
+{% if b.notes %}<p>{{ b.notes }}</p>{% endif %}
 
-<h3>Inventory ingredients</h3>
-<form method="post" class="card" style="margin-bottom:1rem;">
-  <input type="hidden" name="item_id" value="">
+<hr>
+
+<h3>Add inventory ingredient</h3>
+<form action="{{ url_for('batch_detail', batch_id=b.id) }}" method="post" class="card" style="margin-bottom:1rem;">
   <div>
     <label>Item</label>
     <select name="item_id" required>
@@ -18,7 +19,7 @@
   <div>
     <label>Qty</label>
     <input name="qty" type="number" step="any" required style="width:10rem">
-    <select name="unit">
+    <select name="unit" required>
       <option>g</option><option>kg</option><option>oz</option>
       <option>lb</option><option>ml</option><option>l</option>
     </select>
@@ -27,20 +28,28 @@
 </form>
 
 <table class="table">
-  <thead><tr><th>Item</th><th>Qty</th><th>Ext Cost</th><th></th></tr></thead>
+  <thead>
+    <tr><th>Item</th><th>Qty</th><th>Ext Cost</th><th></th></tr>
+  </thead>
   <tbody>
-  {% for ing in b.ingredients %}
-    <tr>
-      <td>{{ ing.item.name }}</td>
-      <td>{{ ing.qty }} {{ ing.unit }}</td>
-      <td>${{ '%.2f' % ing.ext_cost }}</td>
-      <td><a href="{{ url_for('batch_delete_ing', batch_id=b.id, ing_id=ing.id) }}">Remove</a></td>
-    </tr>
-  {% endfor %}
+  {% if b.ingredients|length == 0 %}
+    <tr><td colspan="4" style="opacity:.7;">No inventory ingredients yet.</td></tr>
+  {% else %}
+    {% for ing in b.ingredients %}
+      <tr>
+        <td>{{ ing.item.name }}</td>
+        <td>{{ ing.qty }} {{ ing.unit }}</td>
+        <td>${{ '%.2f' % ing.ext_cost }}</td>
+        <td><a href="{{ url_for('batch_delete_ing', batch_id=b.id, ing_id=ing.id) }}">Remove</a></td>
+      </tr>
+    {% endfor %}
+  {% endif %}
   </tbody>
 </table>
 
-<h3>Sub-batches</h3>
+<hr>
+
+<h3>Add sub-batch</h3>
 <form action="{{ url_for('batch_add_subbatch', batch_id=b.id) }}" method="post" class="card" style="margin-bottom:1rem;">
   <div>
     <label>Batch</label>
@@ -53,7 +62,7 @@
   <div>
     <label>Portion</label>
     <input name="qty" type="number" step="any" required style="width:10rem">
-    <select name="unit">
+    <select name="unit" required>
       <option>g</option><option>kg</option><option>oz</option>
       <option>lb</option><option>ml</option><option>l</option>
     </select>
@@ -62,18 +71,26 @@
 </form>
 
 <table class="table">
-  <thead><tr><th>Batch</th><th>Portion</th><th>Ext Cost</th><th></th></tr></thead>
+  <thead>
+    <tr><th>Batch</th><th>Portion</th><th>Ext Cost</th><th></th></tr>
+  </thead>
   <tbody>
-  {% for sb in b.sub_batches %}
-    <tr>
-      <td>{{ sb.child.name }}</td>
-      <td>{{ sb.qty }} {{ sb.unit }}</td>
-      <td>${{ '%.2f' % sb.ext_cost }}</td>
-      <td><a href="{{ url_for('batch_delete_subbatch', batch_id=b.id, sb_id=sb.id) }}">Remove</a></td>
-    </tr>
-  {% endfor %}
+  {% if b.sub_batches|length == 0 %}
+    <tr><td colspan="4" style="opacity:.7;">No sub-batches yet.</td></tr>
+  {% else %}
+    {% for sb in b.sub_batches %}
+      <tr>
+        <td>{{ sb.child.name }}</td>
+        <td>{{ sb.qty }} {{ sb.unit }}</td>
+        <td>${{ '%.2f' % sb.ext_cost }}</td>
+        <td><a href="{{ url_for('batch_delete_subbatch', batch_id=b.id, sb_id=sb.id) }}">Remove</a></td>
+      </tr>
+    {% endfor %}
+  {% endif %}
   </tbody>
 </table>
+
+<hr>
 
 <p><strong>Total cost:</strong> ${{ '%.2f' % b.total_cost }}</p>
 {% endblock %}
