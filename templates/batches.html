@@ -2,7 +2,7 @@
 {% block content %}
 <h2>Batches</h2>
 <h3>Create Batch</h3>
-<form method="post">
+<form method="post" action="{{ url_for('batches') }}">
   <input name="name" placeholder="Batch name" required>
   <input name="yield_qty" type="number" step="0.01" placeholder="Yield qty" required>
   <input name="yield_unit" placeholder="Yield unit (g, kg, oz, lb, ml, l)" value="lb" required>
