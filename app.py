@@ -1,7 +1,8 @@
-
 from __future__ import annotations
 import os, io, csv
-from flask import Flask, render_template, request, redirect, url_for, flash, session, Response
+from flask import (
+    Flask, render_template, request, redirect, url_for, flash, session, Response
+)
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from dotenv import load_dotenv
@@ -20,18 +21,22 @@ if not db_url:
         try:
             os.makedirs(d, exist_ok=True)
             testfile = os.path.join(d, '.write_test')
-            with open(testfile, 'w') as f: f.write('ok')
+            with open(testfile, 'w') as f:
+                f.write('ok')
             os.remove(testfile)
-            chosen = d; break
-        except Exception: continue
-    if not chosen: chosen = os.getcwd()
+            chosen = d
+            break
+        except Exception:
+            continue
+    if not chosen:
+        chosen = os.getcwd()
     db_url = 'sqlite:///' + os.path.join(chosen, 'app.db')
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# Models
+# ---------- Models ----------
 class InventoryItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), unique=True, nullable=False)
@@ -45,6 +50,7 @@ class BatchRecipe(db.Model):
     yield_unit = db.Column(db.String(10), nullable=False)
     notes = db.Column(db.Text, default='')
     ingredients = relationship('BatchIngredient', backref='batch', cascade='all, delete-orphan')
+
     @property
     def total_cost(self) -> float:
         return sum(ing.ext_cost for ing in self.ingredients)
@@ -56,6 +62,7 @@ class BatchIngredient(db.Model):
     qty = db.Column(db.Float, nullable=False)
     unit = db.Column(db.String(10), nullable=False)
     item = relationship('InventoryItem')
+
     @property
     def ext_cost(self) -> float:
         return unit_cost_in(self.item.unit_cost, self.item.unit, self.unit) * self.qty
@@ -67,6 +74,7 @@ class MenuItem(db.Model):
     notes = db.Column(db.Text, default='')
     inv_components = relationship('MenuIngredient', backref='menu', cascade='all, delete-orphan')
     batch_portions = relationship('MenuBatchPortion', backref='menu', cascade='all, delete-orphan')
+
     @property
     def cost(self) -> float:
         inv_cost = sum(c.ext_cost for c in self.inv_components)
@@ -80,6 +88,7 @@ class MenuIngredient(db.Model):
     qty = db.Column(db.Float, nullable=False)
     unit = db.Column(db.String(10), nullable=False)
     item = relationship('InventoryItem')
+
     @property
     def ext_cost(self) -> float:
         return unit_cost_in(self.item.unit_cost, self.item.unit, self.unit) * self.qty
@@ -91,6 +100,7 @@ class MenuBatchPortion(db.Model):
     portion_qty = db.Column(db.Float, nullable=False)
     portion_unit = db.Column(db.String(10), nullable=False)
     batch = relationship('BatchRecipe')
+
     @property
     def ext_cost(self) -> float:
         if not same_dimension(self.portion_unit, self.batch.yield_unit):
@@ -98,24 +108,26 @@ class MenuBatchPortion(db.Model):
         portion_in_yield_unit = convert(self.portion_qty, self.portion_unit, self.batch.yield_unit)
         return (portion_in_yield_unit / (self.batch.yield_qty or 1.0)) * self.batch.total_cost
 
-# Auth via env
+# ---------- Auth via env ----------
 STAFF_USER = os.environ.get('STAFF_USERNAME', None)
 STAFF_PASS = os.environ.get('STAFF_PASSWORD', None)
 
 @app.before_request
 def _ensure_tables_and_auth():
+    # Ensure tables exist once per process
     if not getattr(app, "_tables_created", False):
         with app.app_context():
             db.create_all()
         app._tables_created = True
         maybe_seed()
-    from flask import request
-    if request.endpoint in ('login','static'): 
+
+    # Allow login/static without auth
+    if request.endpoint in ('login', 'static'):
         return
-    # if STAFF env vars are set, require login; else app is open (dev convenience)
+
+    # If STAFF env vars are set, require login
     if STAFF_USER and STAFF_PASS:
         if not session.get('auth_ok'):
-            from flask import redirect
             return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET','POST'])
@@ -140,18 +152,22 @@ def logout():
     return redirect(url_for('login' if (STAFF_USER and STAFF_PASS) else 'index'))
 
 def maybe_seed():
-    if InventoryItem.query.first(): return
-    db.session.add_all([InventoryItem(name='Rice', unit='g', unit_cost=0.003),
-                        InventoryItem(name='Chicken', unit='lb', unit_cost=2.50),
-                        InventoryItem(name='Olive Oil', unit='ml', unit_cost=0.004)])
+    if InventoryItem.query.first():
+        return
+    db.session.add_all([
+        InventoryItem(name='Rice', unit='g', unit_cost=0.003),
+        InventoryItem(name='Chicken', unit='lb', unit_cost=2.50),
+        InventoryItem(name='Olive Oil', unit='ml', unit_cost=0.004),
+    ])
     db.session.commit()
 
-# Routes
+# ---------- Routes ----------
 @app.route('/')
 def index():
     menu = MenuItem.query.all()
     return render_template('index.html', menu=menu, db_url=db_url)
 
+# ----- Inventory -----
 @app.route('/inventory', methods=['GET','POST'])
 def inventory():
     if request.method == 'POST':
@@ -196,18 +212,6 @@ def delete_inventory(item_id):
     flash('Deleted.')
     return redirect(url_for('inventory'))
 
-# Minimal stubs for other pages so template extends work
-@app.route('/batches')
-def batches():
-    batches_ = BatchRecipe.query.order_by(BatchRecipe.name).all()
-    return render_template('batches.html', batches=batches_, db_url=db_url)
-
-@app.route('/menu')
-def menu_items():
-    menu = MenuItem.query.order_by(MenuItem.name).all()
-    return render_template('menu.html', menu=menu, db_url=db_url)
-
-# CSV Export/Import (inventory only for brevity in this patch)
 @app.route('/inventory/export.csv')
 def inventory_export_csv():
     si = io.StringIO(); w = csv.writer(si)
@@ -243,5 +247,126 @@ def inventory_import_csv():
     flash(f'Imported {count} new, updated {updated}.')
     return redirect(url_for('inventory'))
 
+# ----- Batches -----
+@app.route('/batches', methods=['GET', 'POST'])
+def batches():
+    if request.method == 'POST':
+        name = request.form.get('name','').strip()
+        yield_qty = float(request.form.get('yield_qty') or 0)
+        yield_unit = (request.form.get('yield_unit') or '').strip().lower()
+        notes = (request.form.get('notes') or '').strip()
+
+        if not name or yield_unit not in ('g','kg','oz','lb','ml','l'):
+            flash('Name and a valid yield unit are required.')
+        elif BatchRecipe.query.filter_by(name=name).first():
+            flash('Batch name already exists.')
+        else:
+            db.session.add(BatchRecipe(name=name, yield_qty=yield_qty, yield_unit=yield_unit, notes=notes))
+            db.session.commit()
+            flash('Batch created.')
+        return redirect(url_for('batches'))
+
+    batches_ = BatchRecipe.query.order_by(BatchRecipe.name).all()
+    return render_template('batches.html', batches=batches_, db_url=db_url)
+
+@app.route('/batches/<int:batch_id>', methods=['GET', 'POST'])
+def batch_detail(batch_id):
+    b = BatchRecipe.query.get_or_404(batch_id)
+    items = InventoryItem.query.order_by(InventoryItem.name).all()
+    if request.method == 'POST':
+        try:
+            item_id = int(request.form['item_id'])
+            qty = float(request.form['qty'])
+            unit = request.form['unit'].strip().lower()
+        except Exception:
+            flash('Please provide item, qty, and unit.'); return redirect(url_for('batch_detail', batch_id=b.id))
+
+        if unit not in ('g','kg','oz','lb','ml','l'):
+            flash('Unit must be one of g, kg, oz, lb, ml, l.')
+        else:
+            db.session.add(BatchIngredient(batch_id=b.id, item_id=item_id, qty=qty, unit=unit))
+            db.session.commit()
+            flash('Ingredient added.')
+        return redirect(url_for('batch_detail', batch_id=b.id))
+
+    return render_template('batch_detail.html', b=b, items=items, db_url=db_url)
+
+@app.route('/batches/<int:batch_id>/delete_ing/<int:ing_id>')
+def batch_delete_ing(batch_id, ing_id):
+    ing = BatchIngredient.query.get_or_404(ing_id)
+    db.session.delete(ing); db.session.commit()
+    flash('Removed ingredient.')
+    return redirect(url_for('batch_detail', batch_id=batch_id))
+
+# ----- Menu -----
+@app.route('/menu', methods=['GET','POST'])
+def menu_items():
+    if request.method == 'POST':
+        name = request.form.get('name','').strip()
+        price = float(request.form.get('price') or 0)
+        notes = request.form.get('notes','').strip()
+        if not name:
+            flash('Name is required.')
+        elif MenuItem.query.filter_by(name=name).first():
+            flash('Menu item already exists.')
+        else:
+            db.session.add(MenuItem(name=name, price=price, notes=notes))
+            db.session.commit()
+            flash('Menu item created.')
+        return redirect(url_for('menu_items'))
+    menu = MenuItem.query.order_by(MenuItem.name).all()
+    return render_template('menu.html', menu=menu, db_url=db_url)
+
+@app.route('/menu/<int:menu_id>', methods=['GET','POST'])
+def menu_detail(menu_id):
+    m = MenuItem.query.get_or_404(menu_id)
+    inv_items = InventoryItem.query.order_by(InventoryItem.name).all()
+    batches_ = BatchRecipe.query.order_by(BatchRecipe.name).all()
+    action = request.args.get('action','')
+
+    if request.method == 'POST':
+        if action == 'add_inv':
+            try:
+                item_id = int(request.form['item_id'])
+                qty = float(request.form['qty'])
+                unit = request.form['unit'].strip().lower()
+            except Exception:
+                flash('Provide item, qty, unit.'); return redirect(url_for('menu_detail', menu_id=m.id))
+            if unit not in ('g','kg','oz','lb','ml','l'):
+                flash('Unit must be one of g, kg, oz, lb, ml, l.')
+            else:
+                db.session.add(MenuIngredient(menu_id=m.id, item_id=item_id, qty=qty, unit=unit))
+                db.session.commit(); flash('Inventory component added.')
+        elif action == 'add_batch':
+            try:
+                batch_id = int(request.form['batch_id'])
+                qty = float(request.form['portion_qty'])
+                unit = request.form['portion_unit'].strip().lower()
+            except Exception:
+                flash('Provide batch, portion qty, unit.'); return redirect(url_for('menu_detail', menu_id=m.id))
+            db.session.add(MenuBatchPortion(menu_id=m.id, batch_id=batch_id, portion_qty=qty, portion_unit=unit))
+            db.session.commit(); flash('Batch portion added.')
+        elif action == 'update_price':
+            m.price = float(request.form.get('price') or 0)
+            db.session.commit(); flash('Price updated.')
+        return redirect(url_for('menu_detail', menu_id=m.id))
+
+    return render_template('menu_detail.html', m=m, inv_items=inv_items, batches=batches_, db_url=db_url)
+
+@app.route('/menu/<int:menu_id>/delete_inv/<int:ing_id>')
+def menu_delete_inv(menu_id, ing_id):
+    ing = MenuIngredient.query.get_or_404(ing_id)
+    db.session.delete(ing); db.session.commit()
+    flash('Removed inventory component.')
+    return redirect(url_for('menu_detail', menu_id=menu_id))
+
+@app.route('/menu/<int:menu_id>/delete_batch/<int:bp_id>')
+def menu_delete_batch(menu_id, bp_id):
+    bp = MenuBatchPortion.query.get_or_404(bp_id)
+    db.session.delete(bp); db.session.commit()
+    flash('Removed batch portion.')
+    return redirect(url_for('menu_detail', menu_id=menu_id))
+
+# ---------- Run ----------
 if __name__ == '__main__':
     app.run(debug=True)
