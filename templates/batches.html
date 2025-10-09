@@ -23,7 +23,7 @@
   <button type="submit">Create</button>
 </form>
 
-<!-- Import CSV -->
+<!-- Import / Export CSV -->
 <form action="{{ url_for('batches_import_csv') }}" method="post" enctype="multipart/form-data" class="card" style="margin-bottom:1rem;">
   <div>
     <label>Import Batches CSV</label>
@@ -35,16 +35,30 @@
 
 <!-- List -->
 <table class="table">
-  <thead><tr><th>Name</th><th>Yield</th><th>Cost</th><th></th></tr></thead>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Yield</th>
+      <th>Components</th>
+      <th></th>
+    </tr>
+  </thead>
   <tbody>
   {% for b in batches %}
     <tr>
-      <td>{{ b.name }}</td>
+      <td><a href="{{ url_for('batch_detail', batch_id=b.id) }}">{{ b.name }}</a></td>
       <td>{{ b.yield_qty }} {{ b.yield_unit }}</td>
-      <td>${{ '%.2f' % b.total_cost }}</td>
+      <td>
+        {{ (b.ingredients | length) | default(0) }} inv /
+        {{ (b.sub_batches | length) | default(0) }} sub
+      </td>
       <td><a href="{{ url_for('batch_detail', batch_id=b.id) }}">Open</a></td>
     </tr>
   {% endfor %}
   </tbody>
 </table>
+
+<p style="margin-top:.5rem; color:#666;">
+  Note: total cost is calculated inside each batch’s detail page to avoid errors if any sub-batch units need fixing.
+</p>
 {% endblock %}
