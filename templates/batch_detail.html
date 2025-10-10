@@ -62,7 +62,7 @@
 
 <table class="table">
   <thead>
-    <tr><th>Item</th><th>Qty</th><th>Ext Cost</th><th></th></tr>
+    <tr><th>Item</th><th>Qty</th><th>Ext Cost</th><th>Actions</th></tr>
   </thead>
   <tbody>
   {% if b.ingredients|length == 0 %}
@@ -71,7 +71,13 @@
     {% for ing in b.ingredients %}
       <tr>
         <td>{{ ing.item.name }}</td>
-        <td>{{ ing.qty }} {{ ing.unit }}</td>
+        <td>
+          <form method="post" action="{{ url_for('batch_update_ingredient', batch_id=b.id, ing_id=ing.id) }}" class="d-flex gap-2">
+            <input name="qty" type="number" step="any" value="{{ ing.qty }}" style="width:7rem">
+            <input name="unit" value="{{ ing.unit }}" style="width:5rem">
+            <button>Update</button>
+          </form>
+        </td>
         <td>${{ '%.2f' % ing.ext_cost }}</td>
         <td><a href="{{ url_for('batch_delete_ing', batch_id=b.id, ing_id=ing.id) }}">Remove</a></td>
       </tr>
@@ -105,7 +111,7 @@
 
 <table class="table">
   <thead>
-    <tr><th>Batch</th><th>Portion</th><th>Ext Cost</th><th></th></tr>
+    <tr><th>Batch</th><th>Portion</th><th>Ext Cost</th><th>Actions</th></tr>
   </thead>
   <tbody>
   {% if b.sub_batches|length == 0 %}
@@ -114,7 +120,13 @@
     {% for sb in b.sub_batches %}
       <tr>
         <td>{{ sb.child.name }}</td>
-        <td>{{ sb.qty }} {{ sb.unit }}</td>
+        <td>
+          <form method="post" action="{{ url_for('batch_update_subbatch', batch_id=b.id, sb_id=sb.id) }}" class="d-flex gap-2">
+            <input name="qty" type="number" step="any" value="{{ sb.qty }}" style="width:7rem">
+            <input name="unit" value="{{ sb.unit }}" style="width:5rem">
+            <button>Update</button>
+          </form>
+        </td>
         <td>${{ '%.2f' % sb.ext_cost }}</td>
         <td><a href="{{ url_for('batch_delete_subbatch', batch_id=b.id, sb_id=sb.id) }}">Remove</a></td>
       </tr>
