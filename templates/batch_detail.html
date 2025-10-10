@@ -1,6 +1,39 @@
 {% extends "base.html" %}
 {% block content %}
+
 <h1>{{ b.name }}</h1>
+
+<!-- Batch Meta: edit name, yield, unit, notes -->
+<form action="{{ url_for('batch_update', batch_id=b.id) }}" method="post" class="card" style="margin-bottom:1rem;">
+  <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+    <div>
+      <label>Name</label>
+      <input name="name" value="{{ b.name }}" required>
+    </div>
+    <div>
+      <label>Yield</label>
+      <input name="yield_qty" type="number" step="any" value="{{ b.yield_qty }}" required style="width:10rem">
+      <select name="yield_unit" required>
+        {% for u in ['g','kg','oz','lb','ml','l'] %}
+          <option value="{{ u }}" {% if b.yield_unit==u %}selected{% endif %}>{{ u }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:1; min-width:240px;">
+      <label>Notes</label>
+      <input name="notes" value="{{ b.notes or '' }}">
+    </div>
+  </div>
+  <button type="submit">Save Changes</button>
+</form>
+
+<!-- Delete Batch -->
+<form action="{{ url_for('batch_delete', batch_id=b.id) }}" method="post"
+      onsubmit="return confirm('Delete this batch? This cannot be undone.');"
+      class="card" style="margin-bottom:1rem; background:#fee;">
+  <button type="submit">Delete Batch</button>
+</form>
+
 <p><strong>Yield:</strong> {{ b.yield_qty }} {{ b.yield_unit }}</p>
 {% if b.notes %}<p>{{ b.notes }}</p>{% endif %}
 
