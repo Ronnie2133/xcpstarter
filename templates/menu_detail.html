@@ -1,7 +1,23 @@
 {% extends 'layout.html' %}
 {% block content %}
 <h2>Menu: {{ m.name }}</h2>
-<p class="muted">Cost: ${{ '%.2f'|format(m.cost) }} &nbsp; | &nbsp; Price: ${{ '%.2f'|format(m.price) }}</p>
+
+{# Compute Food Cost % #}
+{% set food_cost_pct = (m.cost / m.price * 100) if (m.price and m.price > 0) else None %}
+
+<p class="muted">
+  Cost: ${{ '%.2f'|format(m.cost) }} &nbsp; | &nbsp; 
+  Price: ${{ '%.2f'|format(m.price) }} &nbsp; | &nbsp;
+  Food Cost %:
+  {% if food_cost_pct is not none %}
+    {{ '%.1f'|format(food_cost_pct) }}%
+    {% if food_cost_pct > 30 %}
+      <span style="color:red;">▲</span>
+    {% else %}
+      <span style="color:green;">✔</span>
+    {% endif %}
+  {% else %}—{% endif %}
+</p>
 
 <h3>Set Price</h3>
 <form method="post" action="{{ url_for('menu_detail', menu_id=m.id, action='update_price') }}">
