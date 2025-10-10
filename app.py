@@ -536,6 +536,60 @@ def menu_delete_batch(menu_id, bp_id):
     flash('Removed batch portion.')
     return redirect(url_for('menu_detail', menu_id=menu_id))
 
+# ----- Update a batch's meta (name, yield, unit, notes) -----
+@app.route('/batches/<int:batch_id>/update', methods=['POST'])
+def batch_update(batch_id):
+    b = BatchRecipe.query.get_or_404(batch_id)
+    allowed = {'g','kg','oz','lb','ml','l'}
+
+    name = (request.form.get('name') or b.name).strip()
+    notes = (request.form.get('notes') or b.notes).strip()
+
+    try:
+        yield_qty = float(request.form.get('yield_qty') or b.yield_qty)
+    except Exception:
+        yield_qty = b.yield_qty
+
+    yield_unit = (request.form.get('yield_unit') or b.yield_unit).strip().lower()
+
+    if not name or yield_qty <= 0 or yield_unit not in allowed:
+        flash('Please provide a valid name, positive yield, and a valid unit (g, kg, oz, lb, ml, l).')
+        return redirect(url_for('batch_detail', batch_id=b.id))
+
+    # prevent duplicate names (other than this one)
+    exists = BatchRecipe.query.filter(BatchRecipe.name==name, BatchRecipe.id!=b.id).first()
+    if exists:
+        flash('Another batch already uses that name.')
+        return redirect(url_for('batch_detail', batch_id=b.id))
+
+    b.name = name
+    b.yield_qty = yield_qty
+    b.yield_unit = yield_unit
+    b.notes = notes
+    db.session.commit()
+    flash('Batch updated.')
+    return redirect(url_for('batch_detail', batch_id=b.id))
+
+
+# ----- Delete a batch (cleans ingredients and sub-batch links) -----
+@app.route('/batches/<int:batch_id>/delete', methods=['POST'])
+def batch_delete(batch_id):
+    b = BatchRecipe.query.get_or_404(batch_id)
+
+    # Remove inventory ingredients in this batch
+    BatchIngredient.query.filter_by(batch_id=b.id).delete()
+
+    # Remove sub-batches where this is the parent
+    BatchSubBatch.query.filter_by(parent_id=b.id).delete()
+
+    # Remove sub-batches where this is the child (so other batches don’t point to it)
+    BatchSubBatch.query.filter_by(child_id=b.id).delete()
+
+    db.session.delete(b)
+    db.session.commit()
+    flash('Batch deleted.')
+    return redirect(url_for('batches'))
+
 # ---------- Run ----------
 if __name__ == '__main__':
     app.run(debug=True)
