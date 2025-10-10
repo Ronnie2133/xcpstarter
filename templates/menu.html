@@ -10,14 +10,24 @@
 </form>
 <h3>Existing Menu Items</h3>
 <table>
-  <tr><th>Name</th><th>Cost</th><th>Price</th><th>Margin</th><th></th></tr>
+  <tr><th>Name</th><th>Cost</th><th>Price</th><th>Margin %</th><th></th></tr>
   {% for m in menu %}
-    {% set margin = (m.price - m.cost) if (m.price is not none) else 0 %}
+    {% set price = m.price or 0 %}
+    {% set cost = m.cost or 0 %}
+    {% if price > 0 %}
+      {% set margin_pct = ((price - cost) / price * 100) %}
+    {% else %}
+      {% set margin_pct = None %}
+    {% endif %}
     <tr>
       <td>{{ m.name }}</td>
-      <td>${{ '%.2f'|format(m.cost) }}</td>
-      <td>${{ '%.2f'|format(m.price) }}</td>
-      <td>${{ '%.2f'|format(margin) }}</td>
+      <td>${{ '%.2f'|format(cost) }}</td>
+      <td>${{ '%.2f'|format(price) }}</td>
+      <td>
+        {% if margin_pct is not none %}
+          {{ '%.1f'|format(margin_pct) }}%
+        {% else %}—{% endif %}
+      </td>
       <td><a href="{{ url_for('menu_detail', menu_id=m.id) }}">Open</a></td>
     </tr>
   {% else %}
