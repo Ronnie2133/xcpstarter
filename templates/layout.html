@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Kitchen Costing{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">🍳</span>
+    <span class="logo-text">Kitchen<br><strong>Costing</strong></span>
+  </div>
+  <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+    <span class="nav-icon">📊</span> Dashboard
+  </a>
+  <a href="{{ url_for('inventory') }}" class="nav-link {% if request.endpoint == 'inventory' %}active{% endif %}">
+    <span class="nav-icon">📦</span> Inventory
+  </a>
+  <a href="{{ url_for('batches') }}" class="nav-link {% if 'batch' in (request.endpoint or '') %}active{% endif %}">
+    <span class="nav-icon">🥘</span> Batches
+  </a>
+  <a href="{{ url_for('menu_items') }}" class="nav-link {% if 'menu' in (request.endpoint or '') %}active{% endif %}">
+    <span class="nav-icon">🍽️</span> Menu
+  </a>
+  <div class="sidebar-footer">
+    {% if session.get('auth_ok') %}
+      <a href="{{ url_for('logout') }}" class="nav-link">
+        <span class="nav-icon">🚪</span> Logout
+      </a>
+    {% endif %}
+  </div>
+</nav>
+
+<div class="main-wrap">
+  <div class="topbar">
+    <button class="menu-toggle" onclick="document.body.classList.toggle('sidebar-open')">☰</button>
+    <div class="topbar-title">{% block page_title %}{% endblock %}</div>
+  </div>
+
+  <main class="page-content">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for m in messages %}
+          <div class="flash">{{ m }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<!-- Common Ingredients Library Drawer -->
+<div class="drawer-overlay" id="libOverlay" onclick="closeLibrary()"></div>
+<div class="drawer" id="libDrawer">
+  <div class="drawer-header">
+    <h3>Common Ingredients Library</h3>
+    <button class="drawer-close" onclick="closeLibrary()">✕</button>
+  </div>
+  <p class="drawer-sub">Click any ingredient to add it to your inventory instantly.</p>
+  <div class="lib-search">
+    <input type="text" id="libSearch" placeholder="Search ingredients…" oninput="filterLib(this.value)">
+  </div>
+  <div id="libGrid" class="lib-grid"></div>
+</div>
+
+<script>
+// ── Common Ingredients Library ──────────────────────────────────────────────
+const COMMON_INGREDIENTS = [
+  // Proteins
+  {name:'Chicken Breast',unit:'lb',cost:2.50,cal:165,cat:'Proteins'},
+  {name:'Chicken Thigh',unit:'lb',cost:1.80,cal:209,cat:'Proteins'},
+  {name:'Ground Beef (80/20)',unit:'lb',cost:4.50,cal:254,cat:'Proteins'},
+  {name:'Ground Turkey',unit:'lb',cost:3.50,cal:189,cat:'Proteins'},
+  {name:'Salmon Fillet',unit:'lb',cost:9.00,cal:208,cat:'Proteins'},
+  {name:'Shrimp',unit:'lb',cost:8.00,cal:99,cat:'Proteins'},
+  {name:'Bacon',unit:'lb',cost:5.00,cal:541,cat:'Proteins'},
+  {name:'Eggs',unit:'g',cost:0.004,cal:155,cat:'Proteins'},
+  {name:'Tofu (Firm)',unit:'g',cost:0.003,cal:76,cat:'Proteins'},
+  // Dairy
+  {name:'Whole Milk',unit:'ml',cost:0.001,cal:61,cat:'Dairy'},
+  {name:'Heavy Cream',unit:'ml',cost:0.005,cal:340,cat:'Dairy'},
+  {name:'Butter',unit:'g',cost:0.008,cal:717,cat:'Dairy'},
+  {name:'Cheddar Cheese',unit:'g',cost:0.012,cal:402,cat:'Dairy'},
+  {name:'Parmesan',unit:'g',cost:0.018,cal:431,cat:'Dairy'},
+  {name:'Mozzarella',unit:'g',cost:0.010,cal:280,cat:'Dairy'},
+  {name:'Greek Yogurt',unit:'g',cost:0.005,cal:59,cat:'Dairy'},
+  {name:'Cream Cheese',unit:'g',cost:0.007,cal:342,cat:'Dairy'},
+  // Produce
+  {name:'Yellow Onion',unit:'g',cost:0.001,cal:40,cat:'Produce'},
+  {name:'Garlic',unit:'g',cost:0.005,cal:149,cat:'Produce'},
+  {name:'Tomato',unit:'g',cost:0.002,cal:18,cat:'Produce'},
+  {name:'Bell Pepper',unit:'g',cost:0.003,cal:31,cat:'Produce'},
+  {name:'Spinach',unit:'g',cost:0.004,cal:23,cat:'Produce'},
+  {name:'Broccoli',unit:'g',cost:0.003,cal:34,cat:'Produce'},
+  {name:'Carrot',unit:'g',cost:0.001,cal:41,cat:'Produce'},
+  {name:'Celery',unit:'g',cost:0.002,cal:16,cat:'Produce'},
+  {name:'Potato',unit:'g',cost:0.001,cal:77,cat:'Produce'},
+  {name:'Lemon',unit:'g',cost:0.003,cal:29,cat:'Produce'},
+  {name:'Lime',unit:'g',cost:0.003,cal:30,cat:'Produce'},
+  {name:'Avocado',unit:'g',cost:0.005,cal:160,cat:'Produce'},
+  {name:'Jalapeño',unit:'g',cost:0.004,cal:29,cat:'Produce'},
+  {name:'Cilantro',unit:'g',cost:0.010,cal:23,cat:'Produce'},
+  {name:'Basil (Fresh)',unit:'g',cost:0.015,cal:22,cat:'Produce'},
+  // Dry Goods
+  {name:'All-Purpose Flour',unit:'g',cost:0.002,cal:364,cat:'Dry Goods'},
+  {name:'Bread Flour',unit:'g',cost:0.002,cal:361,cat:'Dry Goods'},
+  {name:'Rice (Long Grain)',unit:'g',cost:0.003,cal:130,cat:'Dry Goods'},
+  {name:'Pasta (Dry)',unit:'g',cost:0.003,cal:371,cat:'Dry Goods'},
+  {name:'Panko Breadcrumbs',unit:'g',cost:0.004,cal:395,cat:'Dry Goods'},
+  {name:'Cornstarch',unit:'g',cost:0.003,cal:381,cat:'Dry Goods'},
+  {name:'Sugar (White)',unit:'g',cost:0.002,cal:387,cat:'Dry Goods'},
+  {name:'Brown Sugar',unit:'g',cost:0.002,cal:377,cat:'Dry Goods'},
+  {name:'Kosher Salt',unit:'g',cost:0.001,cal:0,cat:'Dry Goods'},
+  {name:'Black Pepper',unit:'g',cost:0.020,cal:251,cat:'Dry Goods'},
+  {name:'Cumin (Ground)',unit:'g',cost:0.015,cal:375,cat:'Dry Goods'},
+  {name:'Paprika',unit:'g',cost:0.012,cal:282,cat:'Dry Goods'},
+  {name:'Chili Powder',unit:'g',cost:0.012,cal:282,cat:'Dry Goods'},
+  {name:'Dried Oregano',unit:'g',cost:0.015,cal:265,cat:'Dry Goods'},
+  {name:'Baking Powder',unit:'g',cost:0.008,cal:53,cat:'Dry Goods'},
+  {name:'Baking Soda',unit:'g',cost:0.004,cal:0,cat:'Dry Goods'},
+  // Oils & Fats
+  {name:'Olive Oil',unit:'ml',cost:0.004,cal:884,cat:'Oils & Fats'},
+  {name:'Vegetable Oil',unit:'ml',cost:0.002,cal:884,cat:'Oils & Fats'},
+  {name:'Canola Oil',unit:'ml',cost:0.002,cal:884,cat:'Oils & Fats'},
+  {name:'Sesame Oil',unit:'ml',cost:0.008,cal:884,cat:'Oils & Fats'},
+  {name:'Coconut Oil',unit:'ml',cost:0.006,cal:862,cat:'Oils & Fats'},
+  // Sauces & Condiments
+  {name:'Soy Sauce',unit:'ml',cost:0.003,cal:53,cat:'Sauces'},
+  {name:'Worcestershire Sauce',unit:'ml',cost:0.004,cal:78,cat:'Sauces'},
+  {name:'Hot Sauce',unit:'ml',cost:0.005,cal:31,cat:'Sauces'},
+  {name:'Dijon Mustard',unit:'g',cost:0.006,cal:66,cat:'Sauces'},
+  {name:'Mayonnaise',unit:'g',cost:0.005,cal:680,cat:'Sauces'},
+  {name:'Ketchup',unit:'g',cost:0.003,cal:101,cat:'Sauces'},
+  {name:'Honey',unit:'g',cost:0.008,cal:304,cat:'Sauces'},
+  {name:'Sriracha',unit:'ml',cost:0.005,cal:93,cat:'Sauces'},
+  {name:'Fish Sauce',unit:'ml',cost:0.004,cal:35,cat:'Sauces'},
+  // Stocks & Liquids
+  {name:'Chicken Stock',unit:'ml',cost:0.002,cal:15,cat:'Stocks'},
+  {name:'Beef Stock',unit:'ml',cost:0.003,cal:17,cat:'Stocks'},
+  {name:'Vegetable Stock',unit:'ml',cost:0.001,cal:10,cat:'Stocks'},
+  {name:'White Wine',unit:'ml',cost:0.006,cal:82,cat:'Stocks'},
+  {name:'Red Wine',unit:'ml',cost:0.008,cal:85,cat:'Stocks'},
+  {name:'Coconut Milk',unit:'ml',cost:0.004,cal:230,cat:'Stocks'},
+  {name:'Tomato Paste',unit:'g',cost:0.005,cal:82,cat:'Stocks'},
+  {name:'Canned Tomatoes',unit:'g',cost:0.002,cal:24,cat:'Stocks'},
+];
+
+let libTarget = null; // which form/row to populate after picking
+
+function openLibrary(targetCtx) {
+  libTarget = targetCtx || null;
+  renderLib(COMMON_INGREDIENTS);
+  document.getElementById('libOverlay').classList.add('active');
+  document.getElementById('libDrawer').classList.add('active');
+  document.getElementById('libSearch').value = '';
+  document.getElementById('libSearch').focus();
+}
+
+function closeLibrary() {
+  document.getElementById('libOverlay').classList.remove('active');
+  document.getElementById('libDrawer').classList.remove('active');
+}
+
+function filterLib(q) {
+  const filtered = COMMON_INGREDIENTS.filter(i =>
+    i.name.toLowerCase().includes(q.toLowerCase()) ||
+    i.cat.toLowerCase().includes(q.toLowerCase())
+  );
+  renderLib(filtered);
+}
+
+function renderLib(items) {
+  const cats = {};
+  items.forEach(i => { if (!cats[i.cat]) cats[i.cat] = []; cats[i.cat].push(i); });
+  let html = '';
+  Object.entries(cats).forEach(([cat, list]) => {
+    html += `<div class="lib-cat-label">${cat}</div>`;
+    list.forEach(item => {
+      html += `<button class="lib-item" onclick="addFromLibrary(${JSON.stringify(item).replace(/"/g,'&quot;')})">
+        <span class="lib-item-name">${item.name}</span>
+        <span class="lib-item-meta">${item.cal} kcal/100g · ${item.unit}</span>
+      </button>`;
+    });
+  });
+  document.getElementById('libGrid').innerHTML = html || '<p style="color:#999;padding:1rem">No results.</p>';
+}
+
+function addFromLibrary(item) {
+  // POST to /inventory to add the item
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/inventory';
+  const fields = {
+    name: item.name,
+    unit: item.unit,
+    unit_cost: item.cost,
+    category: item.cat,
+    calories_per_100g: item.cal
+  };
+  Object.entries(fields).forEach(([k,v]) => {
+    const inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = k; inp.value = v;
+    form.appendChild(inp);
+  });
+  document.body.appendChild(form);
+  form.submit();
+}
+
+// ── Autocomplete ─────────────────────────────────────────────────────────────
+function setupAutocomplete(inputEl, hiddenIdEl, unitEl) {
+  let box = null;
+  inputEl.addEventListener('input', async function() {
+    const q = this.value.trim();
+    if (q.length < 1) { closeAC(); return; }
+    const res = await fetch(`/api/inventory_search?q=${encodeURIComponent(q)}`);
+    const items = await res.json();
+    if (!items.length) { closeAC(); return; }
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'ac-box';
+      inputEl.parentNode.style.position = 'relative';
+      inputEl.parentNode.appendChild(box);
+    }
+    box.innerHTML = items.slice(0,8).map(i =>
+      `<div class="ac-item" data-id="${i.id}" data-unit="${i.unit}" data-name="${i.name}">
+        <span>${i.name}</span>
+        <span class="ac-meta">$${i.unit_cost.toFixed(4)}/${i.unit} · ${i.calories_per_100g} kcal</span>
+      </div>`
+    ).join('');
+    box.querySelectorAll('.ac-item').forEach(el => {
+      el.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        inputEl.value = this.dataset.name;
+        if (hiddenIdEl) hiddenIdEl.value = this.dataset.id;
+        if (unitEl) unitEl.value = this.dataset.unit;
+        closeAC();
+      });
+    });
+  });
+  function closeAC() { if (box) { box.remove(); box = null; } }
+  inputEl.addEventListener('blur', () => setTimeout(closeAC, 150));
+}
+
+// ── USDA Lookup ───────────────────────────────────────────────────────────────
+async function usdaLookup(nameInputId, calInputId, btnEl) {
+  const name = document.getElementById(nameInputId).value.trim();
+  if (!name) { alert('Enter an ingredient name first.'); return; }
+  btnEl.textContent = 'Looking up…';
+  btnEl.disabled = true;
+  try {
+    const res = await fetch(`/api/usda_lookup?q=${encodeURIComponent(name)}`);
+    const data = await res.json();
+    btnEl.textContent = 'USDA Lookup';
+    btnEl.disabled = false;
+    if (data.error || !data.results || !data.results.length) {
+      alert('No USDA results found. Enter calories manually.');
+      return;
+    }
+    const r = data.results[0];
+    if (confirm(`Found: ${r.name}\n${r.calories_per_100g} kcal per 100g\n\nUse this value?`)) {
+      document.getElementById(calInputId).value = r.calories_per_100g;
+    }
+  } catch(e) {
+    btnEl.textContent = 'USDA Lookup';
+    btnEl.disabled = false;
+    alert('Lookup failed. Enter calories manually.');
+  }
+}
+</script>
+
+</body>
+</html>

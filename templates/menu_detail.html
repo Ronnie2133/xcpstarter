@@ -1,0 +1,342 @@
+{% extends 'layout.html' %}
+{% block title %}{{ m.name }} – Menu{% endblock %}
+{% block page_title %}Menu Item{% endblock %}
+{% block content %}
+
+{% set fcp = m.food_cost_pct %}
+
+<!-- Header -->
+<div class="flex mb-2">
+  <div>
+    <h1>{{ m.name }}</h1>
+    <div class="flex mt-1">
+      <span class="cat-tag">{{ m.category or 'Other' }}</span>
+      {% if m.total_calories > 0 %}
+        <span class="cal-pill">🔥 {{ m.total_calories|int }} kcal</span>
+      {% endif %}
+      {% if fcp is not none %}
+        {% if fcp <= 28 %}
+          <span class="badge badge-green">{{ '%.1f'|format(fcp) }}% food cost</span>
+        {% elif fcp <= 35 %}
+          <span class="badge badge-yellow">{{ '%.1f'|format(fcp) }}% food cost</span>
+        {% else %}
+          <span class="badge badge-red">⚠ {{ '%.1f'|format(fcp) }}% food cost</span>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  <div style="margin-left:auto" class="flex">
+    <form method="post" action="{{ url_for('menu_clone', menu_id=m.id) }}">
+      <button class="btn btn-secondary btn-sm" type="submit">Clone Item</button>
+    </form>
+    <form method="post" action="{{ url_for('menu_delete', menu_id=m.id) }}"
+          onsubmit="return confirm('Delete this menu item?')">
+      <button class="btn btn-danger btn-sm" type="submit">Delete Item</button>
+    </form>
+  </div>
+</div>
+
+<!-- Stats row -->
+<div class="stats-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px">
+  <div class="stat-card">
+    <div class="stat-label">Food Cost</div>
+    <div class="stat-value" style="font-size:22px">${{ '%.2f'|format(m.cost) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Selling Price</div>
+    <div class="stat-value" style="font-size:22px">${{ '%.2f'|format(m.price) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Gross Profit</div>
+    {% if m.profit is not none %}
+      <div class="stat-value" style="font-size:22px;color:{% if m.profit > 0 %}var(--green){% else %}var(--red){% endif %}">
+        ${{ '%.2f'|format(m.profit) }}
+      </div>
+    {% else %}
+      <div class="stat-value" style="font-size:22px">—</div>
+    {% endif %}
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Calories</div>
+    <div class="stat-value" style="font-size:22px;color:#c2410c">
+      {% if m.total_calories > 0 %}{{ m.total_calories|int }}{% else %}—{% endif %}
+    </div>
+    {% if m.total_calories > 0 %}<div class="stat-sub">kcal</div>{% endif %}
+  </div>
+</div>
+
+<!-- Price & Category edit -->
+<div class="card">
+  <div class="card-header"><span class="card-title">Price & Settings</span></div>
+  <form method="post" action="{{ url_for('menu_detail', menu_id=m.id, action='update_price') }}">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Selling Price ($)</label>
+        <input type="number" name="price" step="0.01" value="{{ '%.2f'|format(m.price) }}">
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select name="category">
+          {% for cat in ['Appetizers','Entrees','Sides','Desserts','Beverages','Specials','Other'] %}
+            <option value="{{ cat }}" {% if m.category == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </form>
+
+  <!-- Suggested price calculator -->
+  <div class="price-suggest mt-2">
+    <label>💡 Suggested Price Calculator</label>
+    <div class="flex">
+      <span style="font-size:13px;color:#1d4ed8">Target food cost %:</span>
+      <input type="range" id="targetPct" min="20" max="45" value="30" step="1"
+             oninput="calcSuggest()" style="width:140px;margin:0 8px">
+      <span id="targetPctVal" style="font-weight:700;color:#1d4ed8;min-width:34px">30%</span>
+    </div>
+    <div class="price-suggest-result" id="suggestResult">
+      Suggested price: ${{ '%.2f'|format(m.cost / 0.30) if m.cost > 0 else '—' }}
+    </div>
+    <div class="muted" style="font-size:11.5px;margin-top:2px">Based on food cost of ${{ '%.2f'|format(m.cost) }}</div>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- Bulk Add Inventory Ingredients -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Add Inventory Ingredients</span>
+    <div class="flex">
+      <button class="btn btn-lib btn-sm" type="button" onclick="openLibrary()">📚 Library</button>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="addMenuRow()">+ Add Row</button>
+    </div>
+  </div>
+  <p class="muted mb-2">Type to search your inventory. Add multiple rows, then click <strong>Add All</strong>.</p>
+  <form method="post" action="{{ url_for('menu_detail', menu_id=m.id, action='add_inv') }}">
+    <div id="menuBulkRows"></div>
+    <div class="flex mt-1">
+      <button class="btn btn-primary" type="submit">Add All Ingredients</button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick="addMenuRow()">+ Another Row</button>
+    </div>
+  </form>
+</div>
+
+<!-- Existing inv components -->
+{% if m.inv_components %}
+<div class="section-header"><span class="section-title">Inventory Components</span></div>
+<div class="tbl-wrap mb-2">
+  <table>
+    <thead>
+      <tr><th>Ingredient</th><th>Qty / Unit</th><th>Unit Cost</th><th>Ext. Cost</th><th>Calories</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for c in m.inv_components %}
+      <tr>
+        <td>{{ c.item.name }}</td>
+        <td>
+          <form method="post" action="{{ url_for('menu_update_inv', menu_id=m.id, ing_id=c.id) }}" class="inline-form">
+            <input type="number" name="qty" step="any" value="{{ '%.3f'|format(c.qty) }}" style="width:80px">
+            <select name="unit" style="width:70px">
+              {% for u in ['g','kg','oz','lb','ml','l'] %}
+                <option value="{{ u }}" {% if c.unit==u %}selected{% endif %}>{{ u }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-primary btn-sm" type="submit">Save</button>
+          </form>
+        </td>
+        <td class="mono muted">${{ '%.4f'|format(c.item.unit_cost) }}/{{ c.item.unit }}</td>
+        <td class="mono">${{ '%.4f'|format(c.ext_cost) }}</td>
+        <td>
+          {% if c.ext_calories > 0 %}
+            <span class="cal-pill">🔥 {{ c.ext_calories|int }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('menu_delete_inv', menu_id=m.id, ing_id=c.id) }}" class="btn btn-danger btn-sm"
+             onclick="return confirm('Remove?')">Remove</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<hr class="divider">
+
+<!-- Batch portions -->
+<div class="card">
+  <div class="card-header"><span class="card-title">Add Batch Portion</span></div>
+  <form method="post" action="{{ url_for('menu_detail', menu_id=m.id, action='add_batch') }}">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Batch Recipe</label>
+        <select name="batch_id" required>
+          {% for b in batches %}
+            <option value="{{ b.id }}">{{ b.name }} (yield: {{ b.yield_qty }} {{ b.yield_unit }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Portion Size</label>
+        <div class="flex">
+          <input type="number" name="portion_qty" step="any" placeholder="100" required style="flex:1">
+          <select name="portion_unit" style="width:70px">
+            <option>g</option><option>kg</option><option>oz</option>
+            <option>lb</option><option>ml</option><option>l</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary" type="submit">Add Batch Portion</button>
+  </form>
+</div>
+
+{% if m.batch_portions %}
+<div class="section-header"><span class="section-title">Batch Portions</span></div>
+<div class="tbl-wrap mb-2">
+  <table>
+    <thead>
+      <tr><th>Batch</th><th>Portion</th><th>Ext. Cost</th><th>Calories</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for bp in m.batch_portions %}
+      <tr>
+        <td>{{ bp.batch.name }}</td>
+        <td>
+          <form method="post" action="{{ url_for('menu_update_batch', menu_id=m.id, bp_id=bp.id) }}" class="inline-form">
+            <input type="number" name="portion_qty" step="any" value="{{ '%.3f'|format(bp.portion_qty) }}" style="width:80px">
+            <select name="portion_unit" style="width:70px">
+              {% for u in ['g','kg','oz','lb','ml','l'] %}
+                <option value="{{ u }}" {% if bp.portion_unit==u %}selected{% endif %}>{{ u }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-primary btn-sm" type="submit">Save</button>
+          </form>
+        </td>
+        <td class="mono">${{ '%.4f'|format(bp.ext_cost) }}</td>
+        <td>
+          {% if bp.ext_calories > 0 %}
+            <span class="cal-pill">🔥 {{ bp.ext_calories|int }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('menu_delete_batch', menu_id=m.id, bp_id=bp.id) }}" class="btn btn-danger btn-sm"
+             onclick="return confirm('Remove?')">Remove</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Full cost breakdown -->
+<div class="section-header mt-3">
+  <span class="section-title">Full Cost Breakdown</span>
+</div>
+<div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Component</th><th>Type</th><th>Qty</th><th>Cost</th><th>Calories</th></tr></thead>
+    <tbody class="breakdown-row">
+      {% for c in m.inv_components %}
+      <tr>
+        <td>{{ c.item.name }}</td>
+        <td><span class="badge badge-gray">Ingredient</span></td>
+        <td class="mono">{{ c.qty }} {{ c.unit }}</td>
+        <td class="mono">${{ '%.4f'|format(c.ext_cost) }}</td>
+        <td>{{ c.ext_calories|int if c.ext_calories > 0 else '—' }}</td>
+      </tr>
+      {% endfor %}
+      {% for bp in m.batch_portions %}
+      <tr>
+        <td>{{ bp.batch.name }}</td>
+        <td><span class="badge badge-blue">Batch</span></td>
+        <td class="mono">{{ bp.portion_qty }} {{ bp.portion_unit }}</td>
+        <td class="mono">${{ '%.4f'|format(bp.ext_cost) }}</td>
+        <td>{{ bp.ext_calories|int if bp.ext_calories > 0 else '—' }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="breakdown-total">
+        <td colspan="3"><strong>TOTAL</strong></td>
+        <td class="mono"><strong>${{ '%.4f'|format(m.cost) }}</strong></td>
+        <td><strong>{{ m.total_calories|int if m.total_calories > 0 else '—' }}</strong></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const INV_ITEMS = {{ inv_items | tojson }};
+let menuRowCount = 0;
+
+function addMenuRow() {
+  menuRowCount++;
+  const idx = menuRowCount;
+  const div = document.createElement('div');
+  div.className = 'bulk-row';
+  div.id = `mrow_${idx}`;
+  div.innerHTML = `
+    <div style="position:relative">
+      <input type="text" placeholder="Ingredient name…" autocomplete="off"
+             id="mname_${idx}" oninput="menuAC(this, ${idx})">
+      <input type="hidden" name="item_id[]" id="mid_${idx}" required>
+    </div>
+    <input type="number" name="qty[]" step="any" placeholder="Qty" min="0.0001" required>
+    <select name="unit[]" id="munit_${idx}">
+      <option>g</option><option>kg</option><option>oz</option>
+      <option selected>lb</option><option>ml</option><option>l</option>
+    </select>
+    <button type="button" class="bulk-remove" onclick="document.getElementById('mrow_${idx}').remove()">×</button>
+  `;
+  document.getElementById('menuBulkRows').appendChild(div);
+}
+
+function menuAC(inputEl, idx) {
+  const q = inputEl.value.trim().toLowerCase();
+  let box = document.getElementById(`mac_${idx}`);
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'ac-box';
+    box.id = `mac_${idx}`;
+    inputEl.parentNode.appendChild(box);
+  }
+  if (!q) { box.innerHTML = ''; return; }
+  const matches = INV_ITEMS.filter(i => i.name.toLowerCase().includes(q)).slice(0, 7);
+  if (!matches.length) { box.innerHTML = '<div class="ac-item" style="color:var(--ink3)">No matches</div>'; return; }
+  box.innerHTML = matches.map(i =>
+    `<div class="ac-item" onmousedown="pickMenuAC(event,${idx},${i.id},'${i.name.replace(/'/g,"\\'")}','${i.unit}')">
+      <span>${i.name}</span>
+      <span class="ac-meta">$${i.unit_cost.toFixed(4)}/${i.unit}</span>
+    </div>`
+  ).join('');
+}
+
+function pickMenuAC(e, idx, id, name, unit) {
+  e.preventDefault();
+  document.getElementById(`mname_${idx}`).value = name;
+  document.getElementById(`mid_${idx}`).value = id;
+  document.getElementById(`munit_${idx}`).value = unit;
+  const box = document.getElementById(`mac_${idx}`);
+  if (box) box.innerHTML = '';
+}
+
+// Suggested price calculator
+const itemCost = {{ m.cost }};
+function calcSuggest() {
+  const pct = parseInt(document.getElementById('targetPct').value);
+  document.getElementById('targetPctVal').textContent = pct + '%';
+  if (itemCost > 0) {
+    const suggested = itemCost / (pct / 100);
+    document.getElementById('suggestResult').textContent = `Suggested price: $${suggested.toFixed(2)}`;
+  }
+}
+
+// Start with 2 rows
+addMenuRow();
+addMenuRow();
+</script>
+
+{% endblock %}
