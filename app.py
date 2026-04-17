@@ -588,7 +588,12 @@ def batch_detail(batch_id):
         return redirect(url_for('batch_detail', batch_id=b.id))
 
     all_batches = BatchRecipe.query.order_by(BatchRecipe.name).all()
-    return render_template('batch_detail.html', b=b, items=items, all_batches=all_batches, db_url=db_url)
+    # Serialize items to plain dicts for tojson in template
+    items_json = [{'id': i.id, 'name': i.name, 'unit': i.unit,
+                   'unit_cost': i.unit_cost, 'calories_per_100g': i.calories_per_100g or 0}
+                  for i in items]
+    return render_template('batch_detail.html', b=b, items=items, items_json=items_json,
+                           all_batches=all_batches, db_url=db_url)
 
 @app.post('/batches/<int:batch_id>/ingredient/<int:ing_id>/update')
 def batch_update_ingredient(batch_id, ing_id):
@@ -901,8 +906,11 @@ def menu_detail(menu_id):
             db.session.commit(); flash('Updated.')
         return redirect(url_for('menu_detail', menu_id=m.id))
 
+    inv_items_json = [{'id': i.id, 'name': i.name, 'unit': i.unit,
+                       'unit_cost': i.unit_cost, 'calories_per_100g': i.calories_per_100g or 0}
+                      for i in inv_items]
     return render_template('menu_detail.html', m=m, inv_items=inv_items,
-                           batches=batches_, db_url=db_url)
+                           inv_items_json=inv_items_json, batches=batches_, db_url=db_url)
 
 @app.post('/menu/<int:menu_id>/inv/<int:ing_id>/update')
 def menu_update_inv(menu_id, ing_id):
