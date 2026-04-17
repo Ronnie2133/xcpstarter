@@ -248,7 +248,7 @@
 
 <script>
 // Inventory items for autocomplete
-const INV_ITEMS = {{ items | tojson }};
+const INV_ITEMS = {{ items_json | tojson }};
 const invMap = {};
 INV_ITEMS.forEach(i => invMap[i.id] = i);
 
