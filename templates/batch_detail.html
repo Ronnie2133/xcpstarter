@@ -268,8 +268,10 @@ function addBulkRow() {
     </div>
     <input type="number" name="qty[]" step="any" placeholder="Qty" min="0.0001" required>
     <select name="unit[]" id="bunit_${idx}">
-      <option>g</option><option>kg</option><option>oz</option>
-      <option selected>lb</option><option>ml</option><option>l</option>
+      <option value="ct">ct</option>
+      <option value="g">g</option><option value="kg">kg</option>
+      <option value="oz">oz</option><option value="lb" selected>lb</option>
+      <option value="ml">ml</option><option value="l">l</option>
     </select>
     <button type="button" class="bulk-remove" onclick="document.getElementById('brow_${idx}').remove()">×</button>
   `;
