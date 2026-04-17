@@ -3,7 +3,6 @@
 {% block page_title %}Inventory{% endblock %}
 {% block content %}
 
-<!-- Actions bar -->
 <div class="flex mb-2">
   <h1>Inventory</h1>
   <div style="margin-left:auto" class="flex">
@@ -18,7 +17,6 @@
   </div>
 </div>
 
-<!-- Add item form -->
 <div class="card">
   <div class="card-header">
     <span class="card-title">Add Ingredient</span>
@@ -27,7 +25,7 @@
     <div class="form-grid">
       <div class="form-group" style="position:relative">
         <label>Ingredient Name *</label>
-        <input type="text" name="name" id="invName" placeholder="e.g. Chicken Breast" required autocomplete="off">
+        <input type="text" name="name" id="invName" placeholder="e.g. Lime" required autocomplete="off">
       </div>
       <div class="form-group">
         <label>Category</label>
@@ -39,7 +37,6 @@
       </div>
     </div>
 
-    <!-- Purchase Price Calculator -->
     <div class="calc-box">
       <div class="calc-box-title">
         🧮 Purchase Price Calculator
@@ -50,17 +47,18 @@
           <label>Total Price Paid ($)</label>
           <div class="flex">
             <span class="calc-prefix">$</span>
-            <input type="number" id="totalPaid" step="0.01" min="0" placeholder="e.g. 45.99"
+            <input type="number" id="totalPaid" step="0.01" min="0" placeholder="e.g. 60.00"
                    oninput="calcUnitCost()" style="flex:1;border-radius:0 8px 8px 0;border-left:none">
           </div>
         </div>
         <div class="form-group">
           <label>Quantity Purchased</label>
-          <input type="number" id="purchaseQty" step="0.001" min="0" placeholder="e.g. 10" oninput="calcUnitCost()">
+          <input type="number" id="purchaseQty" step="0.001" min="0" placeholder="e.g. 200" oninput="calcUnitCost()">
         </div>
         <div class="form-group">
           <label>Purchase Unit</label>
           <select id="purchaseUnit" onchange="calcUnitCost()">
+            <option value="ct">ct — each / count (limes, eggs, etc.)</option>
             <option value="lb">lb — pounds</option>
             <option value="oz">oz — ounces</option>
             <option value="kg">kg — kilograms</option>
@@ -79,7 +77,7 @@
           </div>
         </div>
       </div>
-      <input type="hidden" name="unit" id="finalUnit" value="lb">
+      <input type="hidden" name="unit" id="finalUnit" value="ct">
       <input type="hidden" name="unit_cost" id="finalUnitCost" value="0">
       <div id="calcConfirm" style="display:none" class="calc-confirm">
         <span id="calcConfirmText"></span>
@@ -87,10 +85,9 @@
       </div>
     </div>
 
-    <!-- Calories -->
     <div class="form-grid" style="margin-top:12px">
       <div class="form-group">
-        <label>Calories per 100g <span class="muted">(optional)</span></label>
+        <label>Calories per 100g <span class="muted">(optional — skip for count items)</span></label>
         <div class="flex">
           <input type="number" name="calories_per_100g" id="invCal" step="0.1" placeholder="0" value="0" style="flex:1">
           <button type="button" class="btn btn-usda" onclick="usdaLookup('invName','invCal',this)">USDA Lookup</button>
@@ -102,7 +99,6 @@
   </form>
 </div>
 
-<!-- Inventory table -->
 {% set categories = items|map(attribute='category')|unique|list|sort %}
 {% for cat in categories %}
   {% set cat_items = items|selectattr('category','equalto',cat)|list %}
@@ -113,12 +109,7 @@
     <table>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Unit</th>
-          <th>Cost / Unit</th>
-          <th>Cal / 100g</th>
-          <th>Update Price</th>
-          <th>Actions</th>
+          <th>Name</th><th>Unit</th><th>Cost / Unit</th><th>Cal / 100g</th><th>Update Price</th><th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -129,7 +120,7 @@
             <td><input type="text" name="name" value="{{ i.name }}" required style="max-width:180px"></td>
             <td>
               <select name="unit" style="max-width:70px" id="unit_{{ i.id }}">
-                {% for u in ['lb','oz','kg','g','l','ml'] %}
+                {% for u in ['ct','lb','oz','kg','g','l','ml'] %}
                   <option value="{{ u }}" {% if i.unit == u %}selected{% endif %}>{{ u }}</option>
                 {% endfor %}
               </select>
@@ -150,7 +141,6 @@
                 <input type="hidden" id="ename_{{ i.id }}" value="{{ i.name }}">
               </div>
             </td>
-            <!-- Inline price calculator -->
             <td>
               <div style="font-size:11px;color:var(--ink3);margin-bottom:3px">Enter purchase → auto-fills cost</div>
               <div class="flex" style="gap:4px;flex-wrap:wrap">
@@ -164,8 +154,9 @@
                 <input type="number" step="0.001" placeholder="Qty"
                        id="iqty_{{ i.id }}" style="width:56px;padding:5px 7px;font-size:12px"
                        oninput="inlineCalc({{ i.id }})">
-                <select id="iunit_{{ i.id }}" style="width:64px;padding:5px 7px;font-size:12px"
+                <select id="iunit_{{ i.id }}" style="width:68px;padding:5px 7px;font-size:12px"
                         onchange="inlineCalc({{ i.id }})">
+                  <option value="ct">ct (ea)</option>
                   <option value="lb">lb</option><option value="oz">oz</option>
                   <option value="kg">kg</option><option value="g">g</option>
                   <option value="l">l</option><option value="ml">ml</option>
@@ -202,8 +193,8 @@
 </style>
 
 <script>
-const TO_BASE = { g:1,kg:1000,oz:28.3495,lb:453.592,ml:1,l:1000,fl_oz:29.5735,gal:3785.41,qt:946.353 };
-const SAVE_AS = { g:'g',kg:'kg',oz:'oz',lb:'lb',ml:'ml',l:'l',fl_oz:'ml',gal:'l',qt:'l' };
+const TO_BASE = { ct:1,g:1,kg:1000,oz:28.3495,lb:453.592,ml:1,l:1000,fl_oz:29.5735,gal:3785.41,qt:946.353 };
+const SAVE_AS = { ct:'ct',g:'g',kg:'kg',oz:'oz',lb:'lb',ml:'ml',l:'l',fl_oz:'ml',gal:'l',qt:'l' };
 
 function calcUnitCost() {
   const paid = parseFloat(document.getElementById('totalPaid').value);
@@ -225,27 +216,29 @@ function calcUnitCost() {
   const totalBase      = qty * (TO_BASE[unit] || 1);
   const totalSaveUnits = totalBase / (TO_BASE[saveUnit] || 1);
   const costPerUnit    = paid / totalSaveUnits;
+  const unitLabel      = saveUnit === 'ct' ? 'each' : saveUnit;
 
-  resultEl.innerHTML = `<strong style="color:var(--accent);font-size:17px">$${costPerUnit.toFixed(4)}</strong>&nbsp;<span style="color:var(--ink3)">per ${saveUnit}</span>`;
+  resultEl.innerHTML = `<strong style="color:var(--accent);font-size:17px">$${costPerUnit.toFixed(4)}</strong>&nbsp;<span style="color:var(--ink3)">per ${unitLabel}</span>`;
   boxEl.style.background = '#eff4ff';
   boxEl.style.borderColor = '#bfdbfe';
 
   document.getElementById('finalUnit').value     = saveUnit;
   document.getElementById('finalUnitCost').value = costPerUnit.toFixed(4);
 
+  const purchaseLabel = unit === 'ct' ? `${qty} pieces` : `${qty} ${unit}`;
   document.getElementById('calcConfirmText').textContent =
-    `Will save as $${costPerUnit.toFixed(4)} / ${saveUnit}  (from $${paid.toFixed(2)} for ${qty} ${unit})`;
+    `Will save as $${costPerUnit.toFixed(4)} per ${unitLabel}  (from $${paid.toFixed(2)} for ${purchaseLabel})`;
   confirmEl.style.display = 'flex';
 }
 
 function clearCalc() {
   ['totalPaid','purchaseQty'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('purchaseUnit').value = 'lb';
+  document.getElementById('purchaseUnit').value = 'ct';
   document.getElementById('calcResult').innerHTML = 'Fill in price &amp; qty above';
   document.getElementById('calcResultBox').style.cssText = '';
   document.getElementById('calcConfirm').style.display = 'none';
   document.getElementById('finalUnitCost').value = 0;
-  document.getElementById('finalUnit').value = 'lb';
+  document.getElementById('finalUnit').value = 'ct';
 }
 
 function inlineCalc(id) {
@@ -261,8 +254,9 @@ function inlineCalc(id) {
   const totalBase      = qty * (TO_BASE[unit] || 1);
   const totalSaveUnits = totalBase / (TO_BASE[saveUnit] || 1);
   const cost           = paid / totalSaveUnits;
+  const unitLabel      = saveUnit === 'ct' ? 'each' : saveUnit;
 
-  resEl.textContent = `→ $${cost.toFixed(4)}/${saveUnit} — applied! Hit Save.`;
+  resEl.textContent = `→ $${cost.toFixed(4)}/${unitLabel} — applied! Hit Save.`;
   if (ucEl) ucEl.value = cost.toFixed(4);
 }
 </script>
