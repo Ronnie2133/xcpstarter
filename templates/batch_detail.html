@@ -73,7 +73,7 @@
         <div class="flex">
           <input type="number" name="yield_qty" step="any" value="{{ b.yield_qty }}" required style="flex:1">
           <select name="yield_unit" style="width:70px">
-            {% for u in ['g','kg','oz','lb','ml','l'] %}
+            {% for u in ['ct','g','kg','oz','lb','ml','l'] %}
               <option value="{{ u }}" {% if b.yield_unit==u %}selected{% endif %}>{{ u }}</option>
             {% endfor %}
           </select>
@@ -114,9 +114,7 @@
   <p class="muted mb-2">Type an ingredient name — it will autocomplete from your inventory. Add as many rows as you need, then click <strong>Add All</strong>.</p>
 
   <form method="post" action="{{ url_for('batch_detail', batch_id=b.id) }}" id="bulkForm">
-    <div id="bulkRows">
-      <!-- rows added by JS -->
-    </div>
+    <div id="bulkRows"></div>
     <div class="flex mt-1">
       <button class="btn btn-primary" type="submit" id="bulkSubmit">Add All Ingredients</button>
       <button class="btn btn-ghost btn-sm" type="button" onclick="addBulkRow()">+ Another Row</button>
@@ -142,172 +140,3 @@
         <td>{{ ing.item.name }}</td>
         <td colspan="2">
           <form method="post" action="{{ url_for('batch_update_ingredient', batch_id=b.id, ing_id=ing.id) }}" class="inline-form">
-            <input type="number" name="qty" step="any" value="{{ ing.qty }}" style="width:80px">
-            <select name="unit" style="width:70px">
-              {% for u in ['g','kg','oz','lb','ml','l'] %}
-                <option value="{{ u }}" {% if ing.unit==u %}selected{% endif %}>{{ u }}</option>
-              {% endfor %}
-            </select>
-            <button class="btn btn-primary btn-sm" type="submit">Save</button>
-          </form>
-        </td>
-        <td class="mono">${{ '%.4f'|format(ing.ext_cost) }}</td>
-        <td>
-          {% if ing.ext_calories > 0 %}
-            <span class="cal-pill">🔥 {{ ing.ext_calories|int }}</span>
-          {% else %}—{% endif %}
-        </td>
-        <td>
-          <a href="{{ url_for('batch_delete_ing', batch_id=b.id, ing_id=ing.id) }}" class="btn btn-danger btn-sm"
-             onclick="return confirm('Remove this ingredient?')">Remove</a>
-        </td>
-      </tr>
-      {% endfor %}
-      <tr class="breakdown-total">
-        <td colspan="3"><strong>Total</strong></td>
-        <td class="mono"><strong>${{ '%.2f'|format(b.total_cost) }}</strong></td>
-        <td><span class="cal-pill">🔥 {{ b.total_calories|int }}</span></td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-{% else %}
-<p class="muted mb-2">No ingredients yet. Use the form above to add some.</p>
-{% endif %}
-
-<hr class="divider">
-
-<!-- Sub-batches -->
-<div class="section-header">
-  <span class="section-title">Sub-Batches</span>
-</div>
-
-<div class="card">
-  <div class="card-header"><span class="card-title">Add Sub-Batch</span></div>
-  <form method="post" action="{{ url_for('batch_add_subbatch', batch_id=b.id) }}">
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Batch</label>
-        <select name="child_id" required>
-          {% for sb in all_batches if sb.id != b.id %}
-            <option value="{{ sb.id }}">{{ sb.name }} ({{ sb.yield_qty }} {{ sb.yield_unit }})</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Portion Qty</label>
-        <div class="flex">
-          <input type="number" name="qty" step="any" required placeholder="100" style="flex:1">
-          <select name="unit" style="width:70px">
-            <option>g</option><option>kg</option><option>oz</option>
-            <option>lb</option><option>ml</option><option>l</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <button class="btn btn-primary" type="submit">Add Sub-Batch</button>
-  </form>
-</div>
-
-{% if b.sub_batches %}
-<div class="tbl-wrap">
-  <table>
-    <thead><tr><th>Batch</th><th>Portion</th><th>Ext. Cost</th><th>Calories</th><th></th></tr></thead>
-    <tbody>
-      {% for sb in b.sub_batches %}
-      <tr>
-        <td>{{ sb.child.name }}</td>
-        <td>
-          <form method="post" action="{{ url_for('batch_update_subbatch', batch_id=b.id, sb_id=sb.id) }}" class="inline-form">
-            <input type="number" name="qty" step="any" value="{{ sb.qty }}" style="width:80px">
-            <select name="unit" style="width:70px">
-              {% for u in ['g','kg','oz','lb','ml','l'] %}
-                <option value="{{ u }}" {% if sb.unit==u %}selected{% endif %}>{{ u }}</option>
-              {% endfor %}
-            </select>
-            <button class="btn btn-primary btn-sm" type="submit">Save</button>
-          </form>
-        </td>
-        <td class="mono">${{ '%.4f'|format(sb.ext_cost) }}</td>
-        <td>
-          {% if sb.ext_calories > 0 %}
-            <span class="cal-pill">🔥 {{ sb.ext_calories|int }}</span>
-          {% else %}—{% endif %}
-        </td>
-        <td>
-          <a href="{{ url_for('batch_delete_subbatch', batch_id=b.id, sb_id=sb.id) }}" class="btn btn-danger btn-sm"
-             onclick="return confirm('Remove this sub-batch?')">Remove</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-
-<script>
-// Inventory items for autocomplete
-const INV_ITEMS = {{ items_json | tojson }};
-const invMap = {};
-INV_ITEMS.forEach(i => invMap[i.id] = i);
-
-let rowCount = 0;
-
-function addBulkRow() {
-  rowCount++;
-  const idx = rowCount;
-  const div = document.createElement('div');
-  div.className = 'bulk-row';
-  div.id = `brow_${idx}`;
-  div.innerHTML = `
-    <div style="position:relative">
-      <input type="text" placeholder="Ingredient name…" class="ac-trigger"
-             id="bname_${idx}" autocomplete="off" oninput="acSearch(this, ${idx})">
-      <input type="hidden" name="item_id[]" id="bid_${idx}" required>
-    </div>
-    <input type="number" name="qty[]" step="any" placeholder="Qty" min="0.0001" required>
-    <select name="unit[]" id="bunit_${idx}">
-      <option>g</option><option>kg</option><option>oz</option>
-      <option selected>lb</option><option>ml</option><option>l</option>
-    </select>
-    <button type="button" class="bulk-remove" onclick="document.getElementById('brow_${idx}').remove()">×</button>
-  `;
-  document.getElementById('bulkRows').appendChild(div);
-}
-
-function acSearch(inputEl, idx) {
-  const q = inputEl.value.trim().toLowerCase();
-  let box = document.getElementById(`ac_${idx}`);
-  if (!box) {
-    box = document.createElement('div');
-    box.className = 'ac-box';
-    box.id = `ac_${idx}`;
-    inputEl.parentNode.appendChild(box);
-  }
-  if (!q) { box.innerHTML = ''; return; }
-  const matches = INV_ITEMS.filter(i => i.name.toLowerCase().includes(q)).slice(0, 7);
-  if (!matches.length) { box.innerHTML = '<div class="ac-item" style="color:var(--ink3)">No matches in inventory</div>'; return; }
-  box.innerHTML = matches.map(i =>
-    `<div class="ac-item" onmousedown="pickAC(event,${idx},${i.id},'${i.name.replace(/'/g,"\\'")}','${i.unit}')">
-      <span>${i.name}</span>
-      <span class="ac-meta">$${i.unit_cost.toFixed(4)}/${i.unit}</span>
-    </div>`
-  ).join('');
-}
-
-function pickAC(e, idx, id, name, unit) {
-  e.preventDefault();
-  document.getElementById(`bname_${idx}`).value = name;
-  document.getElementById(`bid_${idx}`).value = id;
-  document.getElementById(`bunit_${idx}`).value = unit;
-  const box = document.getElementById(`ac_${idx}`);
-  if (box) box.innerHTML = '';
-}
-
-// Start with 2 rows
-addBulkRow();
-addBulkRow();
-</script>
-
-{% endblock %}
