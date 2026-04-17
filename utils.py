@@ -4,6 +4,9 @@ VOLUME_FACTORS = {'ml':1.0,'l':1000.0}
 
 def same_dimension(u1, u2):
     u1 = u1.lower(); u2 = u2.lower()
+    # ct is only compatible with ct
+    if u1 == 'ct' or u2 == 'ct':
+        return u1 == u2
     return (u1 in WEIGHT_FACTORS and u2 in WEIGHT_FACTORS) or (u1 in VOLUME_FACTORS and u2 in VOLUME_FACTORS)
 
 def _to_base(value, unit):
@@ -21,6 +24,9 @@ def convert(value, from_unit, to_unit):
 
 def unit_cost_in(unit_cost, item_unit, target_unit):
     if item_unit.lower() == target_unit.lower(): return unit_cost
+    # ct can't convert to other units
+    if item_unit.lower() == 'ct' or target_unit.lower() == 'ct':
+        return unit_cost if item_unit.lower() == target_unit.lower() else 0.0
     # 1 target_unit expressed in item_unit
     one_target_in_item = convert(1.0, target_unit, item_unit)
     return unit_cost * one_target_in_item
