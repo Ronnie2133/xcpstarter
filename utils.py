@@ -1,5 +1,5 @@
 # utils.py
-WEIGHT_FACTORS = {'g':1.0,'kg':1000.0,'oz':28.349523125,'lb':453.59237}
+WEIGHT_FACTORS = {'g':1.0,'kg':1000.0,'oz':28.349523125,'lb':453.59237,'ct':1.0}
 VOLUME_FACTORS = {'ml':1.0,'l':1000.0}
 
 def same_dimension(u1, u2):
