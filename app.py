@@ -370,7 +370,7 @@ def inventory():
         unit_cost = float(request.form.get('unit_cost') or 0)
         category = request.form.get('category', 'Other').strip()
         calories_per_100g = float(request.form.get('calories_per_100g') or 0)
-        if unit not in ('g','kg','oz','lb','ml','l'):
+        if unit not in ('g','kg','oz','lb','ml','l','ct'):
             flash('Unit must be one of g, kg, oz, lb, ml, l')
         else:
             db.session.add(InventoryItem(
