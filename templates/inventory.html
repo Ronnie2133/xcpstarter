@@ -23,50 +23,86 @@
   <div class="card-header">
     <span class="card-title">Add Ingredient</span>
   </div>
-  <form method="post">
+  <form method="post" id="addForm">
     <div class="form-grid">
       <div class="form-group" style="position:relative">
-        <label>Name *</label>
+        <label>Ingredient Name *</label>
         <input type="text" name="name" id="invName" placeholder="e.g. Chicken Breast" required autocomplete="off">
       </div>
       <div class="form-group">
         <label>Category</label>
         <select name="category">
-          <option>Proteins</option>
-          <option>Dairy</option>
-          <option>Produce</option>
-          <option>Dry Goods</option>
-          <option>Oils & Fats</option>
-          <option>Sauces</option>
-          <option>Stocks</option>
-          <option selected>Other</option>
+          <option>Proteins</option><option>Dairy</option><option>Produce</option>
+          <option>Dry Goods</option><option>Oils &amp; Fats</option>
+          <option>Sauces</option><option>Stocks</option><option selected>Other</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Purchase Unit *</label>
-        <select name="unit">
-          <option>lb</option><option>oz</option>
-          <option>kg</option><option>g</option>
-          <option>l</option><option>ml</option>
-        </select>
+    </div>
+
+    <!-- Purchase Price Calculator -->
+    <div class="calc-box">
+      <div class="calc-box-title">
+        🧮 Purchase Price Calculator
+        <span class="muted" style="font-size:12px;font-weight:400"> — enter what you paid and how much you got, we calculate the rest</span>
       </div>
-      <div class="form-group">
-        <label>Cost per Unit ($) *</label>
-        <input type="number" name="unit_cost" step="0.0001" placeholder="0.0000" value="0" required>
+      <div class="calc-grid">
+        <div class="form-group">
+          <label>Total Price Paid ($)</label>
+          <div class="flex">
+            <span class="calc-prefix">$</span>
+            <input type="number" id="totalPaid" step="0.01" min="0" placeholder="e.g. 45.99"
+                   oninput="calcUnitCost()" style="flex:1;border-radius:0 8px 8px 0;border-left:none">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Quantity Purchased</label>
+          <input type="number" id="purchaseQty" step="0.001" min="0" placeholder="e.g. 10" oninput="calcUnitCost()">
+        </div>
+        <div class="form-group">
+          <label>Purchase Unit</label>
+          <select id="purchaseUnit" onchange="calcUnitCost()">
+            <option value="lb">lb — pounds</option>
+            <option value="oz">oz — ounces</option>
+            <option value="kg">kg — kilograms</option>
+            <option value="g">g — grams</option>
+            <option value="l">l — liters</option>
+            <option value="ml">ml — milliliters</option>
+            <option value="gal">gal — gallons (saved as l)</option>
+            <option value="fl_oz">fl oz (saved as ml)</option>
+            <option value="qt">qt — quarts (saved as l)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Calculated Cost per Unit</label>
+          <div class="calc-result-box" id="calcResultBox">
+            <span id="calcResult" style="color:var(--ink3)">Fill in price &amp; qty above</span>
+          </div>
+        </div>
       </div>
+      <input type="hidden" name="unit" id="finalUnit" value="lb">
+      <input type="hidden" name="unit_cost" id="finalUnitCost" value="0">
+      <div id="calcConfirm" style="display:none" class="calc-confirm">
+        <span id="calcConfirmText"></span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="clearCalc()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Calories -->
+    <div class="form-grid" style="margin-top:12px">
       <div class="form-group">
-        <label>Calories per 100g</label>
+        <label>Calories per 100g <span class="muted">(optional)</span></label>
         <div class="flex">
           <input type="number" name="calories_per_100g" id="invCal" step="0.1" placeholder="0" value="0" style="flex:1">
           <button type="button" class="btn btn-usda" onclick="usdaLookup('invName','invCal',this)">USDA Lookup</button>
         </div>
       </div>
     </div>
+
     <button class="btn btn-primary" type="submit">+ Add to Inventory</button>
   </form>
 </div>
 
-<!-- Inventory table grouped by category -->
+<!-- Inventory table -->
 {% set categories = items|map(attribute='category')|unique|list|sort %}
 {% for cat in categories %}
   {% set cat_items = items|selectattr('category','equalto',cat)|list %}
@@ -81,6 +117,7 @@
           <th>Unit</th>
           <th>Cost / Unit</th>
           <th>Cal / 100g</th>
+          <th>Update Price</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -88,29 +125,54 @@
         {% for i in cat_items %}
         <tr>
           <form method="post" action="{{ url_for('update_inventory', item_id=i.id) }}">
+            <input type="hidden" name="category" value="{{ i.category or 'Other' }}">
+            <td><input type="text" name="name" value="{{ i.name }}" required style="max-width:180px"></td>
             <td>
-              <input type="text" name="name" value="{{ i.name }}" required style="max-width:180px">
-            </td>
-            <td>
-              <select name="unit" style="max-width:70px">
+              <select name="unit" style="max-width:70px" id="unit_{{ i.id }}">
                 {% for u in ['lb','oz','kg','g','l','ml'] %}
                   <option value="{{ u }}" {% if i.unit == u %}selected{% endif %}>{{ u }}</option>
                 {% endfor %}
               </select>
             </td>
             <td>
-              <input type="hidden" name="category" value="{{ i.category or 'Other' }}">
               <div class="flex">
                 <span class="muted mono" style="font-size:12px">$</span>
-                <input type="number" step="0.0001" name="unit_cost" value="{{ '%.4f'|format(i.unit_cost) }}" required style="max-width:100px">
+                <input type="number" step="0.0001" name="unit_cost" id="uc_{{ i.id }}"
+                       value="{{ '%.4f'|format(i.unit_cost) }}" required style="max-width:100px">
               </div>
             </td>
             <td>
               <div class="flex">
-                <input type="number" step="0.1" name="calories_per_100g" value="{{ i.calories_per_100g or 0 }}" style="max-width:80px" id="cal_{{ i.id }}">
-                <button type="button" class="btn btn-usda" onclick="usdaLookup('editName_{{ i.id }}','cal_{{ i.id }}',this)" title="USDA lookup">🔍</button>
-                <input type="hidden" id="editName_{{ i.id }}" value="{{ i.name }}">
+                <input type="number" step="0.1" name="calories_per_100g"
+                       value="{{ i.calories_per_100g or 0 }}" style="max-width:80px" id="cal_{{ i.id }}">
+                <button type="button" class="btn btn-usda"
+                        onclick="usdaLookup('ename_{{ i.id }}','cal_{{ i.id }}',this)" title="USDA">🔍</button>
+                <input type="hidden" id="ename_{{ i.id }}" value="{{ i.name }}">
               </div>
+            </td>
+            <!-- Inline price calculator -->
+            <td>
+              <div style="font-size:11px;color:var(--ink3);margin-bottom:3px">Enter purchase → auto-fills cost</div>
+              <div class="flex" style="gap:4px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:2px">
+                  <span style="font-size:11px;color:var(--ink3)">$</span>
+                  <input type="number" step="0.01" placeholder="Total $"
+                         id="ipaid_{{ i.id }}" style="width:72px;padding:5px 7px;font-size:12px"
+                         oninput="inlineCalc({{ i.id }})">
+                </div>
+                <span style="font-size:11px;color:var(--ink3);align-self:center">/</span>
+                <input type="number" step="0.001" placeholder="Qty"
+                       id="iqty_{{ i.id }}" style="width:56px;padding:5px 7px;font-size:12px"
+                       oninput="inlineCalc({{ i.id }})">
+                <select id="iunit_{{ i.id }}" style="width:64px;padding:5px 7px;font-size:12px"
+                        onchange="inlineCalc({{ i.id }})">
+                  <option value="lb">lb</option><option value="oz">oz</option>
+                  <option value="kg">kg</option><option value="g">g</option>
+                  <option value="l">l</option><option value="ml">ml</option>
+                  <option value="gal">gal</option><option value="fl_oz">fl oz</option>
+                </select>
+              </div>
+              <div id="ires_{{ i.id }}" style="font-size:11px;color:var(--green);margin-top:3px;font-weight:600;min-height:14px"></div>
             </td>
             <td class="flex">
               <button class="btn btn-primary btn-sm" type="submit">Save</button>
@@ -129,5 +191,80 @@
     <p>No inventory yet. Add an ingredient above or use the <strong>Common Ingredients Library</strong>.</p>
   </div>
 {% endfor %}
+
+<style>
+.calc-box { background:#f0f4ff; border:1.5px solid #bfdbfe; border-radius:12px; padding:16px 18px; margin:12px 0; }
+.calc-box-title { font-size:14px; font-weight:700; color:#1d4ed8; margin-bottom:12px; }
+.calc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
+.calc-prefix { background:#e0e7ff; border:1px solid var(--border); border-right:none; border-radius:8px 0 0 8px; padding:9px 10px; font-size:13px; color:#1d4ed8; font-weight:600; }
+.calc-result-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:9px 12px; font-size:13.5px; min-height:40px; display:flex; align-items:center; }
+.calc-confirm { margin-top:10px; background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:8px 12px; font-size:13px; color:#15803d; font-weight:600; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+</style>
+
+<script>
+const TO_BASE = { g:1,kg:1000,oz:28.3495,lb:453.592,ml:1,l:1000,fl_oz:29.5735,gal:3785.41,qt:946.353 };
+const SAVE_AS = { g:'g',kg:'kg',oz:'oz',lb:'lb',ml:'ml',l:'l',fl_oz:'ml',gal:'l',qt:'l' };
+
+function calcUnitCost() {
+  const paid = parseFloat(document.getElementById('totalPaid').value);
+  const qty  = parseFloat(document.getElementById('purchaseQty').value);
+  const unit = document.getElementById('purchaseUnit').value;
+  const resultEl  = document.getElementById('calcResult');
+  const confirmEl = document.getElementById('calcConfirm');
+  const boxEl     = document.getElementById('calcResultBox');
+
+  if (!paid || !qty || paid <= 0 || qty <= 0) {
+    resultEl.innerHTML = 'Fill in price &amp; qty above';
+    resultEl.style.color = 'var(--ink3)';
+    confirmEl.style.display = 'none';
+    document.getElementById('finalUnitCost').value = 0;
+    return;
+  }
+
+  const saveUnit       = SAVE_AS[unit] || unit;
+  const totalBase      = qty * (TO_BASE[unit] || 1);
+  const totalSaveUnits = totalBase / (TO_BASE[saveUnit] || 1);
+  const costPerUnit    = paid / totalSaveUnits;
+
+  resultEl.innerHTML = `<strong style="color:var(--accent);font-size:17px">$${costPerUnit.toFixed(4)}</strong>&nbsp;<span style="color:var(--ink3)">per ${saveUnit}</span>`;
+  boxEl.style.background = '#eff4ff';
+  boxEl.style.borderColor = '#bfdbfe';
+
+  document.getElementById('finalUnit').value     = saveUnit;
+  document.getElementById('finalUnitCost').value = costPerUnit.toFixed(4);
+
+  document.getElementById('calcConfirmText').textContent =
+    `Will save as $${costPerUnit.toFixed(4)} / ${saveUnit}  (from $${paid.toFixed(2)} for ${qty} ${unit})`;
+  confirmEl.style.display = 'flex';
+}
+
+function clearCalc() {
+  ['totalPaid','purchaseQty'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('purchaseUnit').value = 'lb';
+  document.getElementById('calcResult').innerHTML = 'Fill in price &amp; qty above';
+  document.getElementById('calcResultBox').style.cssText = '';
+  document.getElementById('calcConfirm').style.display = 'none';
+  document.getElementById('finalUnitCost').value = 0;
+  document.getElementById('finalUnit').value = 'lb';
+}
+
+function inlineCalc(id) {
+  const paid = parseFloat(document.getElementById(`ipaid_${id}`).value);
+  const qty  = parseFloat(document.getElementById(`iqty_${id}`).value);
+  const unit = document.getElementById(`iunit_${id}`).value;
+  const resEl = document.getElementById(`ires_${id}`);
+  const ucEl  = document.getElementById(`uc_${id}`);
+
+  if (!paid || !qty || paid <= 0 || qty <= 0) { resEl.textContent = ''; return; }
+
+  const saveUnit       = SAVE_AS[unit] || unit;
+  const totalBase      = qty * (TO_BASE[unit] || 1);
+  const totalSaveUnits = totalBase / (TO_BASE[saveUnit] || 1);
+  const cost           = paid / totalSaveUnits;
+
+  resEl.textContent = `→ $${cost.toFixed(4)}/${saveUnit} — applied! Hit Save.`;
+  if (ucEl) ucEl.value = cost.toFixed(4);
+}
+</script>
 
 {% endblock %}
